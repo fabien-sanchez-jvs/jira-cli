@@ -84,3 +84,26 @@ export type Board = z.infer<typeof BoardSchema>;
 export const BoardsResponseSchema = z.object({
   values: z.array(BoardSchema),
 });
+
+// Pièce jointe d'une issue (champ `attachment`, ou réponse d'upload).
+export const AttachmentSchema = z
+  .object({
+    id: z.coerce.string(),
+    filename: z.string(),
+    size: z.number(),
+    mimeType: z.string().optional(),
+    content: z.string(), // URL de téléchargement du contenu binaire
+  })
+  .passthrough();
+
+export type Attachment = z.infer<typeof AttachmentSchema>;
+
+// Réponse de POST /issue/{key}/attachments : tableau des PJ créées.
+export const AttachmentsResponseSchema = z.array(AttachmentSchema);
+
+// Issue restreinte au champ `attachment` (GET /issue/{key}?fields=attachment).
+export const IssueAttachmentsSchema = z.object({
+  fields: z.object({
+    attachment: z.array(AttachmentSchema).optional().default([]),
+  }),
+});

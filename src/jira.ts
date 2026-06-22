@@ -1,10 +1,13 @@
 import { textToAdf } from "./adf.js";
 import {
+  type Attachment,
+  AttachmentsResponseSchema,
   type Board,
   BoardSprintsResponseSchema,
   BoardsResponseSchema,
   type CreateIssueResponse,
   CreateIssueResponseSchema,
+  IssueAttachmentsSchema,
   type Sprint,
   type Transition,
   TransitionsResponseSchema,
@@ -49,8 +52,15 @@ function formatError(status: number, statusText: string, body: string): string {
 
 interface RequestOptions {
   body?: unknown;
+  // Corps brut (FormData/Blob…) : envoyé tel quel, sans JSON.stringify ni
+  // en-tête Content-Type JSON (fetch fixe lui-même le boundary multipart).
+  rawBody?: BodyInit;
+  // En-têtes additionnels (ex. X-Atlassian-Token pour l'upload).
+  headers?: Record<string, string>;
   root?: "platform" | "agile";
   parseJson?: boolean;
+  // "json" (défaut) parse la réponse ; "buffer" renvoie le binaire (download).
+  responseType?: "json" | "buffer";
 }
 
 async function request(
@@ -59,22 +69,39 @@ async function request(
   path: string,
   reqOpts: RequestOptions = {},
 ): Promise<unknown> {
-  const { body, root = "platform", parseJson = true } = reqOpts;
+  const {
+    body,
+    rawBody,
+    headers: extraHeaders,
+    root = "platform",
+    parseJson = true,
+    responseType = "json",
+  } = reqOpts;
   const base = root === "agile" ? "/rest/agile/1.0" : "/rest/api/3";
-  const url = new URL(base + path, opts.baseUrl).toString();
+  // Un chemin absolu (http…) est utilisé tel quel : ex. l'URL `content` d'une
+  // pièce jointe renvoyée par l'API.
+  const url = /^https?:\/\//.test(path)
+    ? path
+    : new URL(base + path, opts.baseUrl).toString();
 
   logger.debug(
     `${method} ${url}${body ? ` ${JSON.stringify(body).slice(0, 500)}` : ""}`,
   );
 
+  const headers: Record<string, string> = {
+    Authorization: authHeader(opts.email, opts.token),
+    Accept: responseType === "buffer" ? "*/*" : "application/json",
+    ...extraHeaders,
+  };
+  // Content-Type JSON uniquement pour un corps JSON (pas pour un rawBody).
+  if (body !== undefined && rawBody === undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
   const res = await fetch(url, {
     method,
-    headers: {
-      Authorization: authHeader(opts.email, opts.token),
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: body ? JSON.stringify(body) : undefined,
+    headers,
+    body: rawBody ?? (body !== undefined ? JSON.stringify(body) : undefined),
   });
 
   if (!res.ok) {
@@ -82,6 +109,9 @@ async function request(
     throw new Error(formatError(res.status, res.statusText, text));
   }
 
+  if (responseType === "buffer") {
+    return Buffer.from(await res.arrayBuffer());
+  }
   if (!parseJson || res.status === 204) return undefined;
   const text = await res.text();
   return text ? JSON.parse(text) : undefined;
@@ -181,6 +211,48 @@ export async function linkIssues(
     },
     parseJson: false,
   });
+}
+
+// Liste les pièces jointes d'une issue (champ `attachment`).
+export async function getAttachments(
+  opts: JiraClientOptions,
+  key: string,
+): Promise<Attachment[]> {
+  const json = await request(
+    opts,
+    "GET",
+    `/issue/${encodeURIComponent(key)}?fields=attachment`,
+  );
+  return IssueAttachmentsSchema.parse(json).fields.attachment;
+}
+
+// Joint un ou plusieurs fichiers à une issue (multipart/form-data).
+export async function uploadAttachments(
+  opts: JiraClientOptions,
+  key: string,
+  files: { filename: string; data: Buffer }[],
+): Promise<Attachment[]> {
+  const form = new FormData();
+  for (const f of files) {
+    form.append("file", new Blob([new Uint8Array(f.data)]), f.filename);
+  }
+  const json = await request(
+    opts,
+    "POST",
+    `/issue/${encodeURIComponent(key)}/attachments`,
+    { rawBody: form, headers: { "X-Atlassian-Token": "no-check" } },
+  );
+  return AttachmentsResponseSchema.parse(json);
+}
+
+// Télécharge le contenu binaire d'une pièce jointe (via son URL `content`).
+export async function downloadAttachment(
+  opts: JiraClientOptions,
+  attachment: Attachment,
+): Promise<Buffer> {
+  return (await request(opts, "GET", attachment.content, {
+    responseType: "buffer",
+  })) as Buffer;
 }
 
 export async function getTransitions(

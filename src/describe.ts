@@ -28,7 +28,8 @@ const TOOL_PURPOSE =
   "CLI pour créer et modifier des fiches Jira (Jira Cloud). " +
   "Complète le connecteur Atlassian (lecture seule) en apportant les écritures : " +
   "création, mise à jour, affectation, transition de statut, ajout à un sprint, " +
-  "rattachement à une epic, lien de blocage entre fiches.";
+  "rattachement à une epic, lien de blocage entre fiches, gestion des pièces " +
+  "jointes (upload, liste, téléchargement).";
 
 const INVOCATION_NOTES = [
   "Invocation par le shell : `jira <commande> [options]`.",
@@ -71,6 +72,11 @@ const USAGE_RULES = [
     "`jira block <key> <spec>` ; à la création : `--block <spec>`.",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
     "et aux accents.",
+  "PIÈCES JOINTES : `jira attach <key> <fichiers...>` pour uploader, " +
+    "`jira attachments <key>` pour lister (nom, taille, id), " +
+    "`jira download <key> <cible>` pour télécharger — la cible est un nom de " +
+    "fichier, un id d'attachement, ou `all`. `--out <dir>` choisit le dossier " +
+    "de sortie (défaut: dossier courant).",
   "La description est convertie en ADF automatiquement ; le formatage riche " +
     "(gras, listes…) n'est pas interprété.",
 ];
@@ -104,6 +110,13 @@ const EXAMPLES: Record<string, string[]> = {
   ],
   epic: ["jira epic COM-1234 COM-100", "jira epic COM-1234 none"],
   block: ['jira block COM-1234 "COM-100>"', 'jira block COM-1234 ">COM-200"'],
+  attach: ["jira attach COM-1234 ./capture.png ./log.txt"],
+  attachments: ["jira attachments COM-1234"],
+  download: [
+    "jira download COM-1234 capture.png",
+    "jira download COM-1234 10042",
+    "jira download COM-1234 all --out ./dl",
+  ],
 };
 
 export interface OptionDoc {

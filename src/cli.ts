@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import { buildManifest, renderMarkdown, toJson } from "./describe.js";
@@ -7,7 +7,9 @@ import {
   addIssueToSprint,
   assignIssue,
   createIssue,
+  downloadAttachment,
   findUserByEmail,
+  getAttachments,
   getBoardSprints,
   getBoardsForProject,
   getMyself,
@@ -17,6 +19,7 @@ import {
   setIssueParent,
   transitionIssue,
   updateIssue,
+  uploadAttachments,
 } from "./jira.js";
 import type { Sprint } from "./jira.schemas.js";
 import { logger } from "./logger.js";
@@ -35,6 +38,13 @@ function jiraOptsFromConfig(config: {
 
 function issueUrl(baseUrl: string, key: string): string {
   return `${baseUrl.replace(/\/$/, "")}/browse/${key}`;
+}
+
+// Taille lisible (o / Ko / Mo) pour l'affichage des pièces jointes.
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
 function normalize(name: string): string {
@@ -527,6 +537,90 @@ export function buildCli(): Command {
       const { outwardKey, inwardKey } = parseBlockSpec(spec, issueKey);
       await linkIssues(jira, { type: "Blocks", outwardKey, inwardKey });
       logger.success(`${outwardKey} bloque ${inwardKey}`);
+    });
+
+  program
+    .command("attach")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .argument("<files...>", "Chemins des fichiers à joindre")
+    .description("Ajoute une ou plusieurs pièces jointes à une fiche")
+    .action(async (issueKey, files: string[]) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const payload = files.map((p) => {
+        const abs = resolve(p);
+        return { filename: basename(abs), data: readFileSync(abs) };
+      });
+      const uploaded = await uploadAttachments(jira, issueKey, payload);
+      logger.success(
+        `${uploaded.length} pièce(s) jointe(s) ajoutée(s) à ${issueKey} : ` +
+          uploaded.map((a) => a.filename).join(", "),
+      );
+    });
+
+  program
+    .command("attachments")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .description("Liste les pièces jointes d'une fiche")
+    .action(async (issueKey) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const list = await getAttachments(jira, issueKey);
+      if (list.length === 0) {
+        logger.info(`Aucune pièce jointe sur ${issueKey}.`);
+        return;
+      }
+      logger.info(`Pièces jointes de ${issueKey} :`);
+      for (const a of list) {
+        logger.info(`  • ${a.filename} (${formatSize(a.size)}, id ${a.id})`);
+      }
+    });
+
+  program
+    .command("download")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .argument("<target>", "Nom de fichier, id d'attachement, ou 'all'")
+    .description(
+      "Télécharge une (ou toutes les) pièce(s) jointe(s) d'une fiche",
+    )
+    .option("--out <DIR>", "Dossier de sortie (défaut: dossier courant)")
+    .action(async (issueKey, target, opts) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const list = await getAttachments(jira, issueKey);
+      if (list.length === 0) {
+        throw new Error(`Aucune pièce jointe sur ${issueKey}.`);
+      }
+
+      const wanted =
+        normalize(target) === "all"
+          ? list
+          : list.filter(
+              (a) =>
+                a.id === target || normalize(a.filename) === normalize(target),
+            );
+      if (wanted.length === 0) {
+        const available = list
+          .map((a) => `${a.filename} (id ${a.id})`)
+          .join(" | ");
+        throw new Error(
+          `Pièce jointe "${target}" introuvable sur ${issueKey}. ` +
+            `Disponibles: ${available}`,
+        );
+      }
+
+      const outDir = opts.out ? resolve(opts.out) : process.cwd();
+      const used = new Set<string>();
+      for (const a of wanted) {
+        // Évite d'écraser deux PJ de même nom (Jira l'autorise) : préfixe l'id.
+        const name = used.has(a.filename)
+          ? `${a.id}-${a.filename}`
+          : a.filename;
+        used.add(name);
+        const dest = join(outDir, name);
+        writeFileSync(dest, await downloadAttachment(jira, a));
+        logger.success(`Téléchargé ${a.filename} → ${dest}`);
+      }
     });
 
   program

@@ -12,6 +12,9 @@ Opérations couvertes :
 - **sprint** — affecter une fiche à un sprint
 - **epic** — rattacher (ou détacher) une fiche à une epic
 - **block** — créer un lien de blocage entre deux fiches
+- **attach** — joindre un ou plusieurs fichiers à une fiche
+- **attachments** — lister les pièces jointes d'une fiche
+- **download** — télécharger une (ou toutes les) pièce(s) jointe(s)
 - **describe** — générer une description de l'outil (commandes, options, règles)
   destinée à être lue par un agent IA
 
@@ -104,6 +107,13 @@ jira epic COM-1234 none
 jira block COM-1234 "COM-100>"    # COM-100 bloque COM-1234
 jira block COM-1234 ">COM-200"    # COM-1234 bloque COM-200
 
+# Pièces jointes
+jira attach COM-1234 ./capture.png ./log.txt   # joindre des fichiers
+jira attachments COM-1234                       # lister (nom, taille, id)
+jira download COM-1234 capture.png              # télécharger par nom
+jira download COM-1234 10042                    # ou par id d'attachement
+jira download COM-1234 all --out ./dl           # tout, dans ./dl
+
 # Décrire l'outil pour un agent IA
 jira describe                            # écrit jira-cli.agent.md
 jira describe -f json                    # écrit jira-cli.agent.json
@@ -163,3 +173,8 @@ l'agent dispose d'une description à jour.
   la fiche créée pour `--block`) : `AUTRE>` = *AUTRE bloque la fiche* ; `>AUTRE`
   = *la fiche bloque AUTRE*. Disponible sur une fiche existante
   (`jira block <key> <spec>`) et à la création (`--block <spec>`).
+- **Pièces jointes** : `attach` envoie les fichiers en `multipart/form-data` ;
+  `download` sélectionne par **nom de fichier** (insensible à la casse/accents),
+  par **id** d'attachement, ou `all` pour tout, et écrit dans `--out` (défaut :
+  dossier courant). Si deux pièces jointes portent le même nom, les suivantes
+  sont préfixées par leur id pour éviter d'écraser.
