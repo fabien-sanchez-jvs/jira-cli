@@ -13,6 +13,7 @@ import {
   getMyself,
   getTransitions,
   type JiraClientOptions,
+  setIssueParent,
   transitionIssue,
   updateIssue,
 } from "./jira.js";
@@ -247,6 +248,7 @@ export function buildCli(): Command {
       "Lire la description depuis un fichier ('-' = stdin)",
     )
     .option("-a, --assignee <USER>", "Assigné: email | me | accountId")
+    .option("--epic <KEY>", "Rattacher à une epic (clé de l'epic, ex: COM-100)")
     .option(
       "--sprint <ID|NAME>",
       "Affecter à un sprint (id, ou nom + --board). " +
@@ -287,6 +289,7 @@ export function buildCli(): Command {
         summary: opts.summary,
         description,
         assigneeAccountId,
+        parentKey: opts.epic,
       });
 
       // Sprint : --sprint <id|nom> explicite ; --no-sprint (opts.sprint===false)
@@ -315,7 +318,12 @@ export function buildCli(): Command {
       if (opts.json) {
         console.log(
           JSON.stringify(
-            { key: created.key, url, sprint: sprintId ?? null },
+            {
+              key: created.key,
+              url,
+              sprint: sprintId ?? null,
+              epic: opts.epic ?? null,
+            },
             null,
             2,
           ),
@@ -327,7 +335,10 @@ export function buildCli(): Command {
                 sprintDefaulted ? " (actif, défaut)" : ""
               }`
             : "";
-        logger.success(`Créé ${created.key} — ${url}${sprintSuffix}`);
+        const epicSuffix = opts.epic ? ` — epic ${opts.epic}` : "";
+        logger.success(
+          `Créé ${created.key} — ${url}${sprintSuffix}${epicSuffix}`,
+        );
         if (opts.sprint === undefined && sprintId === undefined) {
           logger.info(
             "Aucun sprint actif déterminé : fiche créée hors sprint " +
@@ -438,6 +449,23 @@ export function buildCli(): Command {
       );
       await addIssueToSprint(jira, sprintId, issueKey);
       logger.success(`${issueKey} affectée au sprint ${sprintId}`);
+    });
+
+  program
+    .command("epic")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .argument("<epicKey>", "Clé de l'epic, ou 'none' pour détacher")
+    .description("Rattache (ou détache) une fiche à une epic")
+    .action(async (issueKey, epicKey) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const detach = normalize(epicKey) === "none";
+      await setIssueParent(jira, issueKey, detach ? null : epicKey);
+      if (detach) {
+        logger.success(`${issueKey} détachée de son epic`);
+      } else {
+        logger.success(`${issueKey} rattachée à l'epic ${epicKey}`);
+      }
     });
 
   program

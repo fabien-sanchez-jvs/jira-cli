@@ -93,6 +93,7 @@ export interface CreateIssueInput {
   summary: string;
   description?: string;
   assigneeAccountId?: string | null;
+  parentKey?: string;
 }
 
 export async function createIssue(
@@ -108,6 +109,7 @@ export async function createIssue(
   if (input.assigneeAccountId) {
     fields.assignee = { accountId: input.assigneeAccountId };
   }
+  if (input.parentKey) fields.parent = { key: input.parentKey };
 
   const json = await request(opts, "POST", "/issue", { body: { fields } });
   return CreateIssueResponseSchema.parse(json);
@@ -141,6 +143,19 @@ export async function assignIssue(
 ): Promise<void> {
   await request(opts, "PUT", `/issue/${encodeURIComponent(key)}/assignee`, {
     body: { accountId },
+    parseJson: false,
+  });
+}
+
+// Rattache une fiche à une epic (ou la détache si parentKey est null) via le
+// champ `parent` de l'API v3 (Jira Cloud moderne : l'epic est le parent).
+export async function setIssueParent(
+  opts: JiraClientOptions,
+  key: string,
+  parentKey: string | null,
+): Promise<void> {
+  await request(opts, "PUT", `/issue/${encodeURIComponent(key)}`, {
+    body: { fields: { parent: parentKey ? { key: parentKey } : null } },
     parseJson: false,
   });
 }

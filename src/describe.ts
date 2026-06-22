@@ -27,7 +27,8 @@ const EXCLUDED = new Set(["help", "describe"]);
 const TOOL_PURPOSE =
   "CLI pour créer et modifier des fiches Jira (Jira Cloud). " +
   "Complète le connecteur Atlassian (lecture seule) en apportant les écritures : " +
-  "création, mise à jour, affectation, transition de statut, ajout à un sprint.";
+  "création, mise à jour, affectation, transition de statut, ajout à un sprint, " +
+  "rattachement à une epic.";
 
 const INVOCATION_NOTES = [
   "Invocation par le shell : `jira <commande> [options]`.",
@@ -38,8 +39,9 @@ const INVOCATION_NOTES = [
     "`JIRA_DEFAULT_BOARD` (évitent de répéter les flags).",
   "Sortie : messages lisibles sur stdout. Code de sortie 0 = succès, " +
     "1 = erreur (message sur stderr).",
-  '`create --json` produit une sortie machine `{ "key", "url", "sprint" }` ' +
-    "(`sprint` = id du sprint affecté, ou `null`) à parser.",
+  '`create --json` produit une sortie machine `{ "key", "url", "sprint", ' +
+    '"epic" }` (`sprint` = id du sprint affecté, ou `null` ; `epic` = clé de ' +
+    "l'epic de rattachement, ou `null`) à parser.",
   "`DEBUG=1` affiche les requêtes HTTP (debug).",
 ];
 
@@ -58,6 +60,10 @@ const USAGE_RULES = [
     "Utiliser `--no-sprint` pour créer hors sprint ; si aucun sprint actif " +
     "unique n'est trouvé, la fiche est créée hors sprint sans erreur.",
   "`update` ÉCRASE le titre et/ou la description fournis (pas de fusion).",
+  "Rattacher à une epic se fait via le champ `parent` (Jira Cloud moderne : " +
+    "l'epic est le parent). À la création, utiliser `--epic <KEY>` ; sur une " +
+    "fiche existante, `jira epic <key> <epicKey>` (et `jira epic <key> none` " +
+    "pour détacher).",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
     "et aux accents.",
   "La description est convertie en ADF automatiquement ; le formatage riche " +
@@ -70,6 +76,7 @@ const EXAMPLES: Record<string, string[]> = {
     'jira create -s "Bouton export grisé sur mobile" -t Bug -d "Détail du bug…"',
     'jira create -s "Refonte du header" --description-file ./desc.md',
     'jira create -s "Titre" -a moi@jvs.fr --sprint "Sprint 42" --board 123',
+    'jira create -s "Titre" --epic COM-100',
     'jira create -s "Titre" --json',
   ],
   update: [
@@ -89,6 +96,7 @@ const EXAMPLES: Record<string, string[]> = {
     "jira sprint COM-1234 456",
     'jira sprint COM-1234 "Sprint 42" --board 123',
   ],
+  epic: ["jira epic COM-1234 COM-100", "jira epic COM-1234 none"],
 };
 
 export interface OptionDoc {
