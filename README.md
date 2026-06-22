@@ -11,6 +11,7 @@ Opérations couvertes :
 - **transition** — changer le statut (ou lister les transitions possibles)
 - **sprint** — affecter une fiche à un sprint
 - **epic** — rattacher (ou détacher) une fiche à une epic
+- **block** — créer un lien de blocage entre deux fiches
 - **describe** — générer une description de l'outil (commandes, options, règles)
   destinée à être lue par un agent IA
 
@@ -74,6 +75,10 @@ jira create -s "Titre" --sprint 456            # ou directement l'id du sprint
 # Rattacher directement à une epic à la création
 jira create -s "Titre" --epic COM-100
 
+# Créer une fiche bloquée par / bloquant une autre
+jira create -s "Titre" --block "COM-200>"     # COM-200 bloque la fiche créée
+jira create -s "Titre" --block ">COM-200"     # la fiche créée bloque COM-200
+
 # Modifier
 jira update COM-1234 -s "Nouveau titre"
 jira update COM-1234 --description-file ./nouvelle-desc.md
@@ -95,6 +100,10 @@ jira sprint COM-1234 "Sprint 42" --board 123
 jira epic COM-1234 COM-100
 jira epic COM-1234 none
 
+# Lien de blocage (notation > relative à la fiche éditée)
+jira block COM-1234 "COM-100>"    # COM-100 bloque COM-1234
+jira block COM-1234 ">COM-200"    # COM-1234 bloque COM-200
+
 # Décrire l'outil pour un agent IA
 jira describe                            # écrit jira-cli.agent.md
 jira describe -f json                    # écrit jira-cli.agent.json
@@ -103,9 +112,10 @@ jira describe -f json -o manifest.json   # format + fichier de sortie au choix
 ```
 
 Ajoute `--json` à `create` pour une sortie machine
-`{ "key", "url", "sprint", "epic" }` (`sprint` = id du sprint affecté, ou
-`null` ; `epic` = clé de l'epic de rattachement, ou `null`), pratique pour
-appeler l'outil depuis un script ou un workflow Claude.
+`{ "key", "url", "sprint", "epic", "block" }` (`sprint` = id du sprint affecté,
+ou `null` ; `epic` = clé de l'epic de rattachement, ou `null` ; `block` = spec
+de blocage appliquée, ou `null`), pratique pour appeler l'outil depuis un script
+ou un workflow Claude.
 
 Active les logs détaillés (URL des requêtes) avec `DEBUG=1`.
 
@@ -148,3 +158,8 @@ l'agent dispose d'une description à jour.
   Jira Cloud moderne, l'epic est le **parent** de la fiche). À la création,
   `--epic <KEY>` ; sur une fiche existante, `jira epic <key> <epicKey>` (et
   `jira epic <key> none` pour détacher).
+- Le **lien de blocage** utilise le type Jira « Blocks ». La direction se note
+  avec la flèche `>`, relative à la fiche éditée (celle passée en argument, ou
+  la fiche créée pour `--block`) : `AUTRE>` = *AUTRE bloque la fiche* ; `>AUTRE`
+  = *la fiche bloque AUTRE*. Disponible sur une fiche existante
+  (`jira block <key> <spec>`) et à la création (`--block <spec>`).

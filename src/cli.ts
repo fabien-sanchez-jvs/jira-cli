@@ -13,6 +13,7 @@ import {
   getMyself,
   getTransitions,
   type JiraClientOptions,
+  linkIssues,
   setIssueParent,
   transitionIssue,
   updateIssue,
@@ -87,6 +88,34 @@ async function resolveAccountId(
 // Extrait la clé de projet d'une clé d'issue : "COM-1812" -> "COM".
 function projectFromKey(key: string): string | undefined {
   return /^([A-Za-z][A-Za-z0-9_]*)-\d+$/.exec(key)?.[1];
+}
+
+// Parse une spec de blocage compacte autour de la flèche ">", relative à la
+// fiche éditée (editedKey) :
+//   "AUTRE>"  -> AUTRE bloque la fiche éditée
+//   ">AUTRE"  -> la fiche éditée bloque AUTRE
+// Retourne le couple prêt pour l'API : outwardKey = bloqueur, inwardKey = bloqué.
+function parseBlockSpec(
+  spec: string,
+  editedKey: string,
+): { outwardKey: string; inwardKey: string } {
+  const s = spec.trim();
+  const invalid = () =>
+    new Error(
+      `Spec de blocage invalide : "${spec}". Utilise "AUTRE>" (AUTRE bloque ` +
+        `la fiche) ou ">AUTRE" (la fiche bloque AUTRE).`,
+    );
+  if (s.startsWith(">")) {
+    const other = s.slice(1).trim();
+    if (!other) throw invalid();
+    return { outwardKey: editedKey, inwardKey: other };
+  }
+  if (s.endsWith(">")) {
+    const other = s.slice(0, -1).trim();
+    if (!other) throw invalid();
+    return { outwardKey: other, inwardKey: editedKey };
+  }
+  throw invalid();
 }
 
 // Cherche un sprint par nom dans une liste : correspondance exacte d'abord,
@@ -250,6 +279,11 @@ export function buildCli(): Command {
     .option("-a, --assignee <USER>", "Assigné: email | me | accountId")
     .option("--epic <KEY>", "Rattacher à une epic (clé de l'epic, ex: COM-100)")
     .option(
+      "--block <SPEC>",
+      'Lien de blocage : "AUTRE>" (AUTRE bloque la fiche créée) ou ' +
+        '">AUTRE" (la fiche créée bloque AUTRE)',
+    )
+    .option(
       "--sprint <ID|NAME>",
       "Affecter à un sprint (id, ou nom + --board). " +
         "Défaut: le sprint actif du board/projet",
@@ -314,6 +348,15 @@ export function buildCli(): Command {
         await addIssueToSprint(jira, sprintId, created.key);
       }
 
+      // Lien de blocage optionnel (--block), relatif à la fiche créée.
+      if (opts.block) {
+        const { outwardKey, inwardKey } = parseBlockSpec(
+          opts.block,
+          created.key,
+        );
+        await linkIssues(jira, { type: "Blocks", outwardKey, inwardKey });
+      }
+
       const url = issueUrl(config.JIRA_URL, created.key);
       if (opts.json) {
         console.log(
@@ -323,6 +366,7 @@ export function buildCli(): Command {
               url,
               sprint: sprintId ?? null,
               epic: opts.epic ?? null,
+              block: opts.block ?? null,
             },
             null,
             2,
@@ -336,8 +380,9 @@ export function buildCli(): Command {
               }`
             : "";
         const epicSuffix = opts.epic ? ` — epic ${opts.epic}` : "";
+        const blockSuffix = opts.block ? ` — blocage ${opts.block}` : "";
         logger.success(
-          `Créé ${created.key} — ${url}${sprintSuffix}${epicSuffix}`,
+          `Créé ${created.key} — ${url}${sprintSuffix}${epicSuffix}${blockSuffix}`,
         );
         if (opts.sprint === undefined && sprintId === undefined) {
           logger.info(
@@ -466,6 +511,22 @@ export function buildCli(): Command {
       } else {
         logger.success(`${issueKey} rattachée à l'epic ${epicKey}`);
       }
+    });
+
+  program
+    .command("block")
+    .argument("<issueKey>", "Clé de la fiche éditée (ex: COM-1234)")
+    .argument(
+      "<spec>",
+      '"AUTRE>" (AUTRE bloque la fiche) ou ">AUTRE" (la fiche bloque AUTRE)',
+    )
+    .description("Crée un lien de blocage entre deux fiches")
+    .action(async (issueKey, spec) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const { outwardKey, inwardKey } = parseBlockSpec(spec, issueKey);
+      await linkIssues(jira, { type: "Blocks", outwardKey, inwardKey });
+      logger.success(`${outwardKey} bloque ${inwardKey}`);
     });
 
   program

@@ -160,6 +160,29 @@ export async function setIssueParent(
   });
 }
 
+export interface LinkIssuesInput {
+  type: string;
+  // Côté outward du type de lien (ex. pour "Blocks" : le bloqueur, verbe "blocks").
+  outwardKey: string;
+  // Côté inward du type de lien (ex. pour "Blocks" : le bloqué, "is blocked by").
+  inwardKey: string;
+}
+
+// Crée un lien entre deux fiches via POST /issueLink.
+export async function linkIssues(
+  opts: JiraClientOptions,
+  input: LinkIssuesInput,
+): Promise<void> {
+  await request(opts, "POST", "/issueLink", {
+    body: {
+      type: { name: input.type },
+      inwardIssue: { key: input.inwardKey },
+      outwardIssue: { key: input.outwardKey },
+    },
+    parseJson: false,
+  });
+}
+
 export async function getTransitions(
   opts: JiraClientOptions,
   key: string,

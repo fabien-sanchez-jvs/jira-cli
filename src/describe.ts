@@ -28,7 +28,7 @@ const TOOL_PURPOSE =
   "CLI pour créer et modifier des fiches Jira (Jira Cloud). " +
   "Complète le connecteur Atlassian (lecture seule) en apportant les écritures : " +
   "création, mise à jour, affectation, transition de statut, ajout à un sprint, " +
-  "rattachement à une epic.";
+  "rattachement à une epic, lien de blocage entre fiches.";
 
 const INVOCATION_NOTES = [
   "Invocation par le shell : `jira <commande> [options]`.",
@@ -40,8 +40,9 @@ const INVOCATION_NOTES = [
   "Sortie : messages lisibles sur stdout. Code de sortie 0 = succès, " +
     "1 = erreur (message sur stderr).",
   '`create --json` produit une sortie machine `{ "key", "url", "sprint", ' +
-    '"epic" }` (`sprint` = id du sprint affecté, ou `null` ; `epic` = clé de ' +
-    "l'epic de rattachement, ou `null`) à parser.",
+    '"epic", "block" }` (`sprint` = id du sprint affecté, ou `null` ; `epic` = ' +
+    "clé de l'epic de rattachement, ou `null` ; `block` = spec de blocage " +
+    "appliquée, ou `null`) à parser.",
   "`DEBUG=1` affiche les requêtes HTTP (debug).",
 ];
 
@@ -64,6 +65,10 @@ const USAGE_RULES = [
     "l'epic est le parent). À la création, utiliser `--epic <KEY>` ; sur une " +
     "fiche existante, `jira epic <key> <epicKey>` (et `jira epic <key> none` " +
     "pour détacher).",
+  "Lien de BLOCAGE (type Jira « Blocks ») via une notation compacte autour de " +
+    "la flèche `>`, relative à la fiche éditée : `AUTRE>` = AUTRE bloque la " +
+    "fiche ; `>AUTRE` = la fiche bloque AUTRE. Sur une fiche existante : " +
+    "`jira block <key> <spec>` ; à la création : `--block <spec>`.",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
     "et aux accents.",
   "La description est convertie en ADF automatiquement ; le formatage riche " +
@@ -77,6 +82,7 @@ const EXAMPLES: Record<string, string[]> = {
     'jira create -s "Refonte du header" --description-file ./desc.md',
     'jira create -s "Titre" -a moi@jvs.fr --sprint "Sprint 42" --board 123',
     'jira create -s "Titre" --epic COM-100',
+    'jira create -s "Titre" --block ">COM-200"',
     'jira create -s "Titre" --json',
   ],
   update: [
@@ -97,6 +103,7 @@ const EXAMPLES: Record<string, string[]> = {
     'jira sprint COM-1234 "Sprint 42" --board 123',
   ],
   epic: ["jira epic COM-1234 COM-100", "jira epic COM-1234 none"],
+  block: ['jira block COM-1234 "COM-100>"', 'jira block COM-1234 ">COM-200"'],
 };
 
 export interface OptionDoc {
