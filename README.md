@@ -178,3 +178,13 @@ l'agent dispose d'une description à jour.
   par **id** d'attachement, ou `all` pour tout, et écrit dans `--out` (défaut :
   dossier courant). Si deux pièces jointes portent le même nom, les suivantes
   sont préfixées par leur id pour éviter d'écraser.
+- **Pièces jointes vidéo** : quand les fichiers téléchargés sont des **vidéos**,
+  [**ffmpeg**](https://ffmpeg.org/) est l'outil recommandé pour les inspecter et
+  les traiter en local — par ex. lire les métadonnées
+  (`ffprobe capture.mp4`), extraire une image (`ffmpeg -i capture.mp4 -ss 5 -vframes 1 frame.png`),
+  recompresser, découper ou convertir le format. S'il n'est pas installé :
+  - **macOS** : `brew install ffmpeg`
+  - **Debian/Ubuntu** : `sudo apt install ffmpeg`
+  - **Fedora** : `sudo dnf install ffmpeg`
+  - **Windows** : `winget install Gyan.FFmpeg` ou `choco install ffmpeg`
+  - sinon, binaires statiques sur <https://ffmpeg.org/download.html>.

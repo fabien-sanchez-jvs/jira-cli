@@ -77,6 +77,13 @@ const USAGE_RULES = [
     "`jira download <key> <cible>` pour télécharger — la cible est un nom de " +
     "fichier, un id d'attachement, ou `all`. `--out <dir>` choisit le dossier " +
     "de sortie (défaut: dossier courant).",
+  "VIDÉOS : si les pièces jointes téléchargées sont des vidéos, utiliser " +
+    "`ffmpeg`/`ffprobe` pour les inspecter et les traiter (métadonnées, " +
+    "extraction d'images, conversion, découpage). S'il n'est pas disponible, " +
+    "l'installer : macOS `brew install ffmpeg` ; Debian/Ubuntu " +
+    "`sudo apt install ffmpeg` ; Fedora `sudo dnf install ffmpeg` ; Windows " +
+    "`winget install Gyan.FFmpeg` (ou `choco install ffmpeg`) ; sinon binaires " +
+    "statiques sur https://ffmpeg.org/download.html.",
   "La description est convertie en ADF automatiquement ; le formatage riche " +
     "(gras, listes…) n'est pas interprété.",
 ];
