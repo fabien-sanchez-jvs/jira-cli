@@ -198,6 +198,32 @@ async function resolveSprintId(
   return resolveSprintFromProject(jira, sprint, project);
 }
 
+// Détermine le sprint ACTIF à utiliser par défaut à la création (sans --sprint).
+// board explicite (--board / JIRA_DEFAULT_BOARD) prioritaire ; sinon on inspecte
+// les boards scrum du projet. Retourne undefined si aucun sprint actif unique
+// n'est déterminable (0 board, ou 0/plusieurs sprints actifs distincts).
+async function resolveActiveSprint(
+  jira: JiraClientOptions,
+  boardId: string | undefined,
+  project: string,
+): Promise<Sprint | undefined> {
+  const boardIds = boardId
+    ? [boardId]
+    : (await getBoardsForProject(jira, project))
+        .filter((b) => b.type === "scrum")
+        .map((b) => String(b.id));
+  if (boardIds.length === 0) return undefined;
+
+  const active = (
+    await Promise.all(boardIds.map((id) => getBoardSprints(jira, id)))
+  )
+    .flat()
+    .filter((s) => s.state === "active");
+  // Dédoublonne : un même sprint peut être listé par plusieurs boards.
+  const unique = [...new Map(active.map((s) => [s.id, s])).values()];
+  return unique.length === 1 ? unique[0] : undefined;
+}
+
 export function buildCli(): Command {
   const program = new Command();
 
@@ -221,7 +247,15 @@ export function buildCli(): Command {
       "Lire la description depuis un fichier ('-' = stdin)",
     )
     .option("-a, --assignee <USER>", "Assigné: email | me | accountId")
-    .option("--sprint <ID|NAME>", "Affecter à un sprint (id, ou nom + --board)")
+    .option(
+      "--sprint <ID|NAME>",
+      "Affecter à un sprint (id, ou nom + --board). " +
+        "Défaut: le sprint actif du board/projet",
+    )
+    .option(
+      "--no-sprint",
+      "Créer hors sprint (désactive le sprint actif par défaut)",
+    )
     .option(
       "--board <ID>",
       "Board pour résoudre un sprint par nom (défaut: JIRA_DEFAULT_BOARD, " +
@@ -255,22 +289,51 @@ export function buildCli(): Command {
         assigneeAccountId,
       });
 
-      if (opts.sprint) {
-        const boardId = opts.board ?? config.JIRA_DEFAULT_BOARD;
-        const sprintId = await resolveSprintId(
-          jira,
-          opts.sprint,
-          boardId,
-          project,
-        );
+      // Sprint : --sprint <id|nom> explicite ; --no-sprint (opts.sprint===false)
+      // pour créer hors sprint ; par défaut on rattache au sprint actif déduit.
+      const boardId = opts.board ?? config.JIRA_DEFAULT_BOARD;
+      let sprintId: number | undefined;
+      let sprintLabel: string | undefined;
+      let sprintDefaulted = false;
+      if (opts.sprint === false) {
+        // création hors sprint
+      } else if (opts.sprint) {
+        sprintId = await resolveSprintId(jira, opts.sprint, boardId, project);
+      } else {
+        const active = await resolveActiveSprint(jira, boardId, project);
+        if (active) {
+          sprintId = active.id;
+          sprintLabel = active.name;
+          sprintDefaulted = true;
+        }
+      }
+      if (sprintId !== undefined) {
         await addIssueToSprint(jira, sprintId, created.key);
       }
 
       const url = issueUrl(config.JIRA_URL, created.key);
       if (opts.json) {
-        console.log(JSON.stringify({ key: created.key, url }, null, 2));
+        console.log(
+          JSON.stringify(
+            { key: created.key, url, sprint: sprintId ?? null },
+            null,
+            2,
+          ),
+        );
       } else {
-        logger.success(`Créé ${created.key} — ${url}`);
+        const sprintSuffix =
+          sprintId !== undefined
+            ? ` — sprint ${sprintLabel ? `« ${sprintLabel} »` : sprintId}${
+                sprintDefaulted ? " (actif, défaut)" : ""
+              }`
+            : "";
+        logger.success(`Créé ${created.key} — ${url}${sprintSuffix}`);
+        if (opts.sprint === undefined && sprintId === undefined) {
+          logger.info(
+            "Aucun sprint actif déterminé : fiche créée hors sprint " +
+              "(--sprint pour préciser, --no-sprint pour l'assumer).",
+          );
+        }
       }
     });
 

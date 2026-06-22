@@ -38,7 +38,8 @@ const INVOCATION_NOTES = [
     "`JIRA_DEFAULT_BOARD` (évitent de répéter les flags).",
   "Sortie : messages lisibles sur stdout. Code de sortie 0 = succès, " +
     "1 = erreur (message sur stderr).",
-  '`create --json` produit une sortie machine `{ "key", "url" }` à parser.',
+  '`create --json` produit une sortie machine `{ "key", "url", "sprint" }` ' +
+    "(`sprint` = id du sprint affecté, ou `null`) à parser.",
   "`DEBUG=1` affiche les requêtes HTTP (debug).",
 ];
 
@@ -52,6 +53,10 @@ const USAGE_RULES = [
     "n'existe que sur un board, il est choisi ; si plusieurs boards le portent, " +
     "on prend celui où le sprint est ACTIF, sinon erreur (préciser `--board`). " +
     "Un id numérique de sprint fonctionne sans board.",
+  "À la CRÉATION, sans `--sprint`, la fiche est rattachée au sprint ACTIF " +
+    "déduit du board/projet (même résolution de board que ci-dessus). " +
+    "Utiliser `--no-sprint` pour créer hors sprint ; si aucun sprint actif " +
+    "unique n'est trouvé, la fiche est créée hors sprint sans erreur.",
   "`update` ÉCRASE le titre et/ou la description fournis (pas de fusion).",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
     "et aux accents.",

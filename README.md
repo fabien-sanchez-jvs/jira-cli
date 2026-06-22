@@ -62,7 +62,11 @@ jira create -s "Bouton export grisé sur mobile" \
 jira create -s "Refonte du header" --description-file ./desc.md
 cat desc.md | jira create -s "Refonte du header" --description-file -
 
-# Créer + assigner + mettre dans un sprint (par nom : board requis, voir plus bas)
+# Par défaut, une fiche créée est rattachée au SPRINT ACTIF (déduit du projet)
+jira create -s "Titre"                         # → sprint actif s'il existe
+jira create -s "Titre" --no-sprint             # → créée hors sprint (backlog)
+
+# Créer + assigner + cibler un sprint précis (par nom : board requis, voir plus bas)
 jira create -s "Titre" -a moi@jvs.fr --sprint "Sprint 42" --board 123
 jira create -s "Titre" --sprint 456            # ou directement l'id du sprint
 
@@ -90,8 +94,9 @@ jira describe -o -                       # affiche sur stdout (md par défaut)
 jira describe -f json -o manifest.json   # format + fichier de sortie au choix
 ```
 
-Ajoute `--json` à `create` pour une sortie machine (clé + URL), pratique pour
-appeler l'outil depuis un script ou un workflow Claude.
+Ajoute `--json` à `create` pour une sortie machine `{ "key", "url", "sprint" }`
+(`sprint` = id du sprint affecté, ou `null`), pratique pour appeler l'outil
+depuis un script ou un workflow Claude.
 
 Active les logs détaillés (URL des requêtes) avec `DEBUG=1`.
 
@@ -126,3 +131,7 @@ l'agent dispose d'une description à jour.
     explicite invitant à préciser `--board`.
 
   Un id numérique de sprint fonctionne toujours sans board.
+- À la **création**, sans `--sprint`, la fiche est rattachée au **sprint actif**
+  déduit du board/projet (même résolution de board que ci-dessus). S'il n'existe
+  pas de sprint actif unique (aucun, ou plusieurs), la fiche est créée **hors
+  sprint** sans erreur. Utilise `--no-sprint` pour forcer la création hors sprint.
