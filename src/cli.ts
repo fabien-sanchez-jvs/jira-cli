@@ -16,6 +16,7 @@ import {
   transitionIssue,
   updateIssue,
 } from "./jira.js";
+import type { Sprint } from "./jira.schemas.js";
 import { logger } from "./logger.js";
 
 function jiraOptsFromConfig(config: {
@@ -87,20 +88,46 @@ function projectFromKey(key: string): string | undefined {
   return /^([A-Za-z][A-Za-z0-9_]*)-\d+$/.exec(key)?.[1];
 }
 
-// Résout un board : --board/JIRA_DEFAULT_BOARD prioritaire ; sinon on déduit
-// l'unique board scrum du projet (erreur explicite si 0 ou plusieurs).
-async function resolveBoardId(
+// Cherche un sprint par nom dans une liste : correspondance exacte d'abord,
+// puis "contient" ; insensible à la casse et aux accents.
+function matchSprintByName(
+  sprints: Sprint[],
+  name: string,
+): Sprint | undefined {
+  const wanted = normalize(name);
+  return (
+    sprints.find((s) => normalize(s.name) === wanted) ??
+    sprints.find((s) => normalize(s.name).includes(wanted))
+  );
+}
+
+// Cherche un sprint par nom sur un board donné (erreur listant les sprints
+// disponibles si rien ne correspond).
+async function resolveSprintOnBoard(
   jira: JiraClientOptions,
-  boardId: string | undefined,
-  project: string | undefined,
-): Promise<string> {
-  if (boardId) return boardId;
-  if (!project) {
+  boardId: string,
+  sprint: string,
+): Promise<number> {
+  const sprints = await getBoardSprints(jira, boardId);
+  const match = matchSprintByName(sprints, sprint);
+  if (!match) {
+    const available = sprints.map((s) => s.name).join(" | ") || "(aucun)";
     throw new Error(
-      "Pour cibler un sprint par nom, fournis --board <id> (ou JIRA_DEFAULT_BOARD). " +
-        "Tu peux aussi passer directement l'id numérique du sprint.",
+      `Sprint "${sprint}" introuvable. Sprints disponibles: ${available}`,
     );
   }
+  return match.id;
+}
+
+// Résout un sprint par nom quand aucun board n'est fourni : on déduit le board
+// à partir des boards scrum du projet. Comme on connaît déjà le nom du sprint,
+// on cherche directement sur quels boards il existe. En cas d'ambiguïté
+// (plusieurs boards portent ce sprint), on préfère celui où il est ACTIF.
+async function resolveSprintFromProject(
+  jira: JiraClientOptions,
+  sprint: string,
+  project: string,
+): Promise<number> {
   const scrum = (await getBoardsForProject(jira, project)).filter(
     (b) => b.type === "scrum",
   );
@@ -110,19 +137,50 @@ async function resolveBoardId(
         "Fournis --board <id> (ou JIRA_DEFAULT_BOARD).",
     );
   }
-  if (scrum.length > 1) {
-    const list = scrum.map((b) => `${b.id} (${b.name})`).join(" | ");
+  if (scrum.length === 1) {
+    return resolveSprintOnBoard(jira, String(scrum[0].id), sprint);
+  }
+
+  // Plusieurs boards scrum : on cherche le sprint nommé sur chacun (en parallèle).
+  const perBoard = await Promise.all(
+    scrum.map(async (board) => ({
+      board,
+      match: matchSprintByName(
+        await getBoardSprints(jira, String(board.id)),
+        sprint,
+      ),
+    })),
+  );
+  const candidates = perBoard.flatMap((c) =>
+    c.match ? [{ board: c.board, match: c.match }] : [],
+  );
+
+  if (candidates.length === 0) {
+    const boards = scrum.map((b) => `${b.id} (${b.name})`).join(" | ");
     throw new Error(
-      `Plusieurs boards scrum pour ${project} : précise --board <id>. ` +
-        `Boards: ${list}`,
+      `Sprint "${sprint}" introuvable sur les boards scrum de ${project}. ` +
+        `Boards consultés: ${boards}`,
     );
   }
-  return String(scrum[0].id);
+  if (candidates.length === 1) return candidates[0].match.id;
+
+  // Ambiguïté : départager via l'état ACTIF du sprint correspondant.
+  const active = candidates.filter((c) => c.match.state === "active");
+  if (active.length === 1) return active[0].match.id;
+
+  const list = candidates
+    .map((c) => `${c.board.id} (${c.board.name})`)
+    .join(" | ");
+  throw new Error(
+    `Plusieurs boards de ${project} contiennent le sprint "${sprint}"` +
+      `${active.length > 1 ? " (plusieurs actifs)" : ""} : précise --board <id>. ` +
+      `Boards: ${list}`,
+  );
 }
 
 // Résout un sprint : un id numérique est utilisé tel quel ; sinon on cherche
-// par nom parmi les sprints actifs/futurs du board (--board, JIRA_DEFAULT_BOARD,
-// ou board scrum déduit du projet).
+// par nom sur le board fourni (--board, JIRA_DEFAULT_BOARD), ou à défaut via les
+// boards scrum déduits du projet.
 async function resolveSprintId(
   jira: JiraClientOptions,
   sprint: string,
@@ -130,19 +188,14 @@ async function resolveSprintId(
   project: string | undefined,
 ): Promise<number> {
   if (/^\d+$/.test(sprint)) return Number(sprint);
-  const resolvedBoardId = await resolveBoardId(jira, boardId, project);
-  const sprints = await getBoardSprints(jira, resolvedBoardId);
-  const wanted = normalize(sprint);
-  const match =
-    sprints.find((s) => normalize(s.name) === wanted) ??
-    sprints.find((s) => normalize(s.name).includes(wanted));
-  if (!match) {
-    const available = sprints.map((s) => s.name).join(" | ") || "(aucun)";
+  if (boardId) return resolveSprintOnBoard(jira, boardId, sprint);
+  if (!project) {
     throw new Error(
-      `Sprint "${sprint}" introuvable. Sprints disponibles: ${available}`,
+      "Pour cibler un sprint par nom, fournis --board <id> (ou JIRA_DEFAULT_BOARD). " +
+        "Tu peux aussi passer directement l'id numérique du sprint.",
     );
   }
-  return match.id;
+  return resolveSprintFromProject(jira, sprint, project);
 }
 
 export function buildCli(): Command {

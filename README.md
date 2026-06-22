@@ -116,8 +116,13 @@ l'agent dispose d'une description à jour.
 - Les noms de **statut** (transition) et de **sprint** sont résolus de façon
   insensible à la casse et aux accents.
 - Cibler un **sprint par nom** nécessite un board. Ordre de résolution :
-  `--board <id>`, sinon `JIRA_DEFAULT_BOARD`, sinon l'**unique board scrum du
-  projet**, déduit automatiquement (le projet vient de `--project` pour `create`,
-  ou de la clé de la fiche pour `sprint`, ex. `COM-1234` → `COM`). Si le projet
-  a 0 ou plusieurs boards scrum, l'outil demande de préciser `--board`. Un id
-  numérique de sprint fonctionne sans board.
+  `--board <id>`, sinon `JIRA_DEFAULT_BOARD`, sinon **déduction** depuis les
+  boards scrum du projet (le projet vient de `--project` pour `create`, ou de la
+  clé de la fiche pour `sprint`, ex. `COM-1234` → `COM`). Comme le nom du sprint
+  est connu, on le cherche sur chaque board scrum :
+  - présent sur **un seul** board → ce board est choisi ;
+  - présent sur **plusieurs** → on retient celui où le sprint est **actif** ;
+  - sinon (0 board scrum, sprint introuvable, ou ambiguïté persistante) → erreur
+    explicite invitant à préciser `--board`.
+
+  Un id numérique de sprint fonctionne toujours sans board.

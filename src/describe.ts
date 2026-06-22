@@ -47,8 +47,10 @@ const USAGE_RULES = [
     "liste les transitions possibles (lecture seule, sans effet) et donne les " +
     "libellés exacts à utiliser.",
   "Affecter à un sprint par NOM nécessite un board. Ordre de résolution : " +
-    "`--board <id>`, sinon `JIRA_DEFAULT_BOARD`, sinon l'unique board scrum du " +
-    "projet (déduit automatiquement ; erreur si le projet en a 0 ou plusieurs). " +
+    "`--board <id>`, sinon `JIRA_DEFAULT_BOARD`, sinon déduction depuis les " +
+    "boards scrum du projet — on cherche le sprint nommé sur chacun ; s'il " +
+    "n'existe que sur un board, il est choisi ; si plusieurs boards le portent, " +
+    "on prend celui où le sprint est ACTIF, sinon erreur (préciser `--board`). " +
     "Un id numérique de sprint fonctionne sans board.",
   "`update` ÉCRASE le titre et/ou la description fournis (pas de fusion).",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
