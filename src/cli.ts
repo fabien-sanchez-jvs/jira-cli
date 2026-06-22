@@ -9,6 +9,7 @@ import {
   createIssue,
   findUserByEmail,
   getBoardSprints,
+  getBoardsForProject,
   getMyself,
   getTransitions,
   type JiraClientOptions,
@@ -81,21 +82,56 @@ async function resolveAccountId(
   return assignee;
 }
 
-// Résout un sprint : un id numérique est utilisé tel quel ; sinon on cherche
-// par nom parmi les sprints actifs/futurs du board (--board requis).
-async function resolveSprintId(
+// Extrait la clé de projet d'une clé d'issue : "COM-1812" -> "COM".
+function projectFromKey(key: string): string | undefined {
+  return /^([A-Za-z][A-Za-z0-9_]*)-\d+$/.exec(key)?.[1];
+}
+
+// Résout un board : --board/JIRA_DEFAULT_BOARD prioritaire ; sinon on déduit
+// l'unique board scrum du projet (erreur explicite si 0 ou plusieurs).
+async function resolveBoardId(
   jira: JiraClientOptions,
-  sprint: string,
   boardId: string | undefined,
-): Promise<number> {
-  if (/^\d+$/.test(sprint)) return Number(sprint);
-  if (!boardId) {
+  project: string | undefined,
+): Promise<string> {
+  if (boardId) return boardId;
+  if (!project) {
     throw new Error(
       "Pour cibler un sprint par nom, fournis --board <id> (ou JIRA_DEFAULT_BOARD). " +
         "Tu peux aussi passer directement l'id numérique du sprint.",
     );
   }
-  const sprints = await getBoardSprints(jira, boardId);
+  const scrum = (await getBoardsForProject(jira, project)).filter(
+    (b) => b.type === "scrum",
+  );
+  if (scrum.length === 0) {
+    throw new Error(
+      `Aucun board scrum trouvé pour le projet ${project}. ` +
+        "Fournis --board <id> (ou JIRA_DEFAULT_BOARD).",
+    );
+  }
+  if (scrum.length > 1) {
+    const list = scrum.map((b) => `${b.id} (${b.name})`).join(" | ");
+    throw new Error(
+      `Plusieurs boards scrum pour ${project} : précise --board <id>. ` +
+        `Boards: ${list}`,
+    );
+  }
+  return String(scrum[0].id);
+}
+
+// Résout un sprint : un id numérique est utilisé tel quel ; sinon on cherche
+// par nom parmi les sprints actifs/futurs du board (--board, JIRA_DEFAULT_BOARD,
+// ou board scrum déduit du projet).
+async function resolveSprintId(
+  jira: JiraClientOptions,
+  sprint: string,
+  boardId: string | undefined,
+  project: string | undefined,
+): Promise<number> {
+  if (/^\d+$/.test(sprint)) return Number(sprint);
+  const resolvedBoardId = await resolveBoardId(jira, boardId, project);
+  const sprints = await getBoardSprints(jira, resolvedBoardId);
   const wanted = normalize(sprint);
   const match =
     sprints.find((s) => normalize(s.name) === wanted) ??
@@ -135,7 +171,8 @@ export function buildCli(): Command {
     .option("--sprint <ID|NAME>", "Affecter à un sprint (id, ou nom + --board)")
     .option(
       "--board <ID>",
-      "Board pour résoudre un sprint par nom (défaut: JIRA_DEFAULT_BOARD)",
+      "Board pour résoudre un sprint par nom (défaut: JIRA_DEFAULT_BOARD, " +
+        "sinon board scrum déduit du projet)",
     )
     .option("--json", "Sortie JSON", false)
     .action(async (opts) => {
@@ -167,7 +204,12 @@ export function buildCli(): Command {
 
       if (opts.sprint) {
         const boardId = opts.board ?? config.JIRA_DEFAULT_BOARD;
-        const sprintId = await resolveSprintId(jira, opts.sprint, boardId);
+        const sprintId = await resolveSprintId(
+          jira,
+          opts.sprint,
+          boardId,
+          project,
+        );
         await addIssueToSprint(jira, sprintId, created.key);
       }
 
@@ -265,13 +307,19 @@ export function buildCli(): Command {
     .description("Affecte une fiche à un sprint")
     .option(
       "--board <ID>",
-      "Board pour résoudre un sprint par nom (défaut: JIRA_DEFAULT_BOARD)",
+      "Board pour résoudre un sprint par nom (défaut: JIRA_DEFAULT_BOARD, " +
+        "sinon board scrum déduit du projet)",
     )
     .action(async (issueKey, sprint, opts) => {
       const config = loadConfig();
       const jira = jiraOptsFromConfig(config);
       const boardId = opts.board ?? config.JIRA_DEFAULT_BOARD;
-      const sprintId = await resolveSprintId(jira, sprint, boardId);
+      const sprintId = await resolveSprintId(
+        jira,
+        sprint,
+        boardId,
+        projectFromKey(issueKey),
+      );
       await addIssueToSprint(jira, sprintId, issueKey);
       logger.success(`${issueKey} affectée au sprint ${sprintId}`);
     });

@@ -1,6 +1,8 @@
 import { textToAdf } from "./adf.js";
 import {
+  type Board,
   BoardSprintsResponseSchema,
+  BoardsResponseSchema,
   type CreateIssueResponse,
   CreateIssueResponseSchema,
   type Sprint,
@@ -185,6 +187,20 @@ export async function findUserByEmail(
 export async function getMyself(opts: JiraClientOptions): Promise<User> {
   const json = await request(opts, "GET", "/myself");
   return UserSchema.parse(json);
+}
+
+// Liste les boards Agile associés à un projet (API Agile).
+export async function getBoardsForProject(
+  opts: JiraClientOptions,
+  projectKeyOrId: string,
+): Promise<Board[]> {
+  const json = await request(
+    opts,
+    "GET",
+    `/board?projectKeyOrId=${encodeURIComponent(projectKeyOrId)}&maxResults=50`,
+    { root: "agile" },
+  );
+  return BoardsResponseSchema.parse(json).values;
 }
 
 export async function getBoardSprints(

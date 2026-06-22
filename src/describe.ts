@@ -46,8 +46,10 @@ const USAGE_RULES = [
   "AVANT de transitionner, lancer `jira transition <key>` SANS statut : cela " +
     "liste les transitions possibles (lecture seule, sans effet) et donne les " +
     "libellés exacts à utiliser.",
-  "Affecter à un sprint par NOM nécessite `--board <id>` (ou " +
-    "`JIRA_DEFAULT_BOARD`). Un id numérique de sprint fonctionne sans board.",
+  "Affecter à un sprint par NOM nécessite un board. Ordre de résolution : " +
+    "`--board <id>`, sinon `JIRA_DEFAULT_BOARD`, sinon l'unique board scrum du " +
+    "projet (déduit automatiquement ; erreur si le projet en a 0 ou plusieurs). " +
+    "Un id numérique de sprint fonctionne sans board.",
   "`update` ÉCRASE le titre et/ou la description fournis (pas de fusion).",
   "Les noms de statut et de sprint sont résolus de façon insensible à la casse " +
     "et aux accents.",

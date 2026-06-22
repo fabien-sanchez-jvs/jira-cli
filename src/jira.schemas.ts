@@ -69,3 +69,18 @@ export const UserSearchResponseSchema = z.array(UserSchema);
 export const BoardSprintsResponseSchema = z.object({
   values: z.array(SprintSchema),
 });
+
+// Board Agile (scrum/kanban), associé à un ou plusieurs projets.
+export const BoardSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    type: z.string(),
+  })
+  .passthrough();
+
+export type Board = z.infer<typeof BoardSchema>;
+
+export const BoardsResponseSchema = z.object({
+  values: z.array(BoardSchema),
+});
