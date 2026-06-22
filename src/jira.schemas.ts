@@ -1,0 +1,71 @@
+import { z } from "zod";
+
+export const SprintSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  state: z.enum(["active", "closed", "future"]),
+});
+
+export type Sprint = z.infer<typeof SprintSchema>;
+
+// ADF = Atlassian Document Format. Nœud récursif, structure ouverte.
+export const AdfNodeSchema: z.ZodType<AdfNode> = z.lazy(() =>
+  z
+    .object({
+      type: z.string(),
+      text: z.string().optional(),
+      content: z.array(AdfNodeSchema).optional(),
+      attrs: z.record(z.any()).optional(),
+      marks: z.array(z.any()).optional(),
+    })
+    .passthrough(),
+);
+
+export interface AdfNode {
+  type: string;
+  text?: string;
+  content?: AdfNode[];
+  attrs?: Record<string, unknown>;
+  marks?: unknown[];
+  [key: string]: unknown;
+}
+
+// Réponse de POST /issue (création).
+export const CreateIssueResponseSchema = z.object({
+  id: z.string(),
+  key: z.string(),
+  self: z.string(),
+});
+
+export type CreateIssueResponse = z.infer<typeof CreateIssueResponseSchema>;
+
+// Transitions disponibles pour une issue.
+export const TransitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  to: z.object({ name: z.string() }).optional(),
+});
+
+export type Transition = z.infer<typeof TransitionSchema>;
+
+export const TransitionsResponseSchema = z.object({
+  transitions: z.array(TransitionSchema),
+});
+
+// Utilisateur Jira (recherche ou /myself).
+export const UserSchema = z
+  .object({
+    accountId: z.string(),
+    displayName: z.string().optional(),
+    emailAddress: z.string().optional(),
+  })
+  .passthrough();
+
+export type User = z.infer<typeof UserSchema>;
+
+export const UserSearchResponseSchema = z.array(UserSchema);
+
+// Liste des sprints d'un board (API Agile).
+export const BoardSprintsResponseSchema = z.object({
+  values: z.array(SprintSchema),
+});

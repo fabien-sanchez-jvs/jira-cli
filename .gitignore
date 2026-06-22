@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.log
+
+# Symlink généré par scripts/install.sh (chemin absolu, spécifique à la machine)
+bin/jira
+.DS_Store
+
+.yarn/
+
+.claude/*.local.*
