@@ -25,10 +25,11 @@ type IntrospectableCommand = Command & {
 const EXCLUDED = new Set(["help", "describe"]);
 
 const TOOL_PURPOSE =
-  "CLI pour créer et modifier des fiches Jira (Jira Cloud). " +
-  "Complète le connecteur Atlassian (lecture seule) en apportant les écritures : " +
-  "création, mise à jour, affectation, transition de statut, ajout à un sprint, " +
-  "rattachement à une epic, lien de blocage entre fiches, ajout de commentaires, " +
+  "CLI pour lire, créer et modifier des fiches Jira (Jira Cloud). " +
+  "Complète le connecteur Atlassian en apportant : " +
+  "lecture détaillée d'une fiche (get), création, mise à jour, affectation, " +
+  "transition de statut, ajout à un sprint, rattachement à une epic, " +
+  "lien de blocage entre fiches, ajout de commentaires, " +
   "gestion des pièces jointes (upload, liste, téléchargement).";
 
 const INVOCATION_NOTES = [
@@ -40,6 +41,10 @@ const INVOCATION_NOTES = [
     "`JIRA_DEFAULT_BOARD` (évitent de répéter les flags).",
   "Sortie : messages lisibles sur stdout. Code de sortie 0 = succès, " +
     "1 = erreur (message sur stderr).",
+  "`get --json` produit une sortie machine " +
+    "`{ key, url, summary, type, status, priority, assignee, reporter, parent, " +
+    "sprint, description, subtasks, links, comments, created, updated }` — " +
+    "description et corps des commentaires convertis en texte brut (ADF → texte).",
   '`create --json` produit une sortie machine `{ "key", "url", "sprint", ' +
     '"epic", "block" }` (`sprint` = id du sprint affecté, ou `null` ; `epic` = ' +
     "clé de l'epic de rattachement, ou `null` ; `block` = spec de blocage " +
@@ -92,6 +97,7 @@ const USAGE_RULES = [
 
 // Exemples curatés par commande (commander ne les expose pas).
 const EXAMPLES: Record<string, string[]> = {
+  get: ["jira get COM-1234", "jira get COM-1234 --json"],
   create: [
     'jira create -s "Bouton export grisé sur mobile" -t Bug -d "Détail du bug…"',
     'jira create -s "Refonte du header" --description-file ./desc.md',

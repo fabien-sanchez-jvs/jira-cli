@@ -1,10 +1,12 @@
 # jira-cli
 
-CLI pour **créer** et **modifier** des fiches Jira (Jira Cloud), en complément du
-connecteur Atlassian de Claude qui est en lecture seule.
+CLI pour **lire**, **créer** et **modifier** des fiches Jira (Jira Cloud), en
+complément du connecteur Atlassian de Claude.
 
 Opérations couvertes :
 
+- **get** — lire le détail d'une fiche (titre, description, statut, priorité,
+  assigné, reporter, parent, sprint, liens, sous-tâches, commentaires)
 - **create** — créer une fiche (titre, description, assigné, sprint)
 - **update** — modifier le titre et/ou la description
 - **assign** — affecter / désaffecter un utilisateur
@@ -59,6 +61,10 @@ droits Jira**.
 ## Usage
 
 ```bash
+# Lire le détail d'une fiche
+jira get COM-1234
+jira get COM-1234 --json   # sortie machine JSON
+
 # Créer une fiche
 jira create -s "Bouton export grisé sur mobile" \
   -d "Sur l'écran Publications, le bouton Export reste grisé en < 768px." \

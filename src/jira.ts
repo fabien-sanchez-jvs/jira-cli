@@ -8,6 +8,8 @@ import {
   type CreateIssueResponse,
   CreateIssueResponseSchema,
   IssueAttachmentsSchema,
+  type IssueDetail,
+  IssueDetailSchema,
   type Sprint,
   type Transition,
   TransitionsResponseSchema,
@@ -336,6 +338,35 @@ export async function addIssueToSprint(
     root: "agile",
     parseJson: false,
   });
+}
+
+export async function getIssue(
+  opts: JiraClientOptions,
+  key: string,
+): Promise<IssueDetail> {
+  const fields = [
+    "summary",
+    "description",
+    "status",
+    "issuetype",
+    "priority",
+    "assignee",
+    "reporter",
+    "parent",
+    "subtasks",
+    "issuelinks",
+    "comment",
+    "attachment",
+    "created",
+    "updated",
+    "customfield_10020",
+  ].join(",");
+  const json = await request(
+    opts,
+    "GET",
+    `/issue/${encodeURIComponent(key)}?fields=${fields}`,
+  );
+  return IssueDetailSchema.parse(json);
 }
 
 export async function addComment(

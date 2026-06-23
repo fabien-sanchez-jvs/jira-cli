@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Command } from "commander";
+import { adfToText } from "./adf.js";
 import { loadConfig } from "./config.js";
 import { buildManifest, renderMarkdown, toJson } from "./describe.js";
 import {
@@ -13,6 +14,7 @@ import {
   getAttachments,
   getBoardSprints,
   getBoardsForProject,
+  getIssue,
   getMyself,
   getTransitions,
   type JiraClientOptions,
@@ -650,6 +652,204 @@ export function buildCli(): Command {
       logger.success(
         `Commentaire ajouté à ${issueKey} — ${issueUrl(config.JIRA_URL, issueKey)}`,
       );
+    });
+
+  program
+    .command("get")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .description("Affiche le détail complet d'une fiche (lecture)")
+    .option("--json", "Sortie JSON", false)
+    .action(async (issueKey, opts) => {
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      const issue = await getIssue(jira, issueKey);
+      const f = issue.fields;
+
+      const fmtDate = (iso: string | undefined): string => {
+        if (!iso) return "—";
+        const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+      };
+
+      const sprints = f.customfield_10020 ?? [];
+      const sprint =
+        sprints.find((s) => s.state === "active") ??
+        sprints.find((s) => s.state === "future") ??
+        sprints[sprints.length - 1];
+
+      const links = f.issuelinks ?? [];
+      const subtasks = f.subtasks ?? [];
+      const attachments = f.attachment ?? [];
+      const comments = f.comment?.comments ?? [];
+
+      if (opts.json) {
+        console.log(
+          JSON.stringify(
+            {
+              key: issue.key,
+              url: issueUrl(config.JIRA_URL, issue.key),
+              summary: f.summary,
+              type: f.issuetype.name,
+              status: f.status.name,
+              priority: f.priority?.name ?? null,
+              assignee: f.assignee?.displayName ?? null,
+              reporter: f.reporter?.displayName ?? null,
+              parent: f.parent
+                ? {
+                    key: f.parent.key,
+                    summary: f.parent.fields.summary ?? null,
+                    type: f.parent.fields.issuetype?.name ?? null,
+                  }
+                : null,
+              sprint: sprint
+                ? { id: sprint.id, name: sprint.name, state: sprint.state }
+                : null,
+              description: f.description ? adfToText(f.description) : null,
+              subtasks: subtasks.map((s) => ({
+                key: s.key,
+                summary: s.fields.summary ?? null,
+                status: s.fields.status?.name ?? null,
+                type: s.fields.issuetype?.name ?? null,
+              })),
+              links: links.map((l) =>
+                l.outwardIssue
+                  ? {
+                      relation: l.type.outward ?? l.type.name,
+                      key: l.outwardIssue.key,
+                      summary: l.outwardIssue.fields.summary ?? null,
+                      status: l.outwardIssue.fields.status?.name ?? null,
+                    }
+                  : {
+                      relation: l.type.inward ?? l.type.name,
+                      key: l.inwardIssue?.key ?? null,
+                      summary: l.inwardIssue?.fields.summary ?? null,
+                      status: l.inwardIssue?.fields.status?.name ?? null,
+                    },
+              ),
+              attachments: attachments.map((a) => ({
+                id: a.id,
+                filename: a.filename,
+                size: a.size,
+                mimeType: a.mimeType ?? null,
+              })),
+              comments: comments.map((c) => ({
+                author: c.author?.displayName ?? "?",
+                created: fmtDate(c.created),
+                body: adfToText(c.body),
+              })),
+              created: fmtDate(f.created),
+              updated: fmtDate(f.updated),
+            },
+            null,
+            2,
+          ),
+        );
+        return;
+      }
+
+      const row = (label: string, value: string) =>
+        console.log(`  ${label.padEnd(10)}: ${value}`);
+
+      console.log(`\n${issue.key} [${f.issuetype.name}] — ${f.summary}`);
+      console.log(`  ${issueUrl(config.JIRA_URL, issue.key)}`);
+      console.log("");
+      row("Statut", f.status.name);
+      if (f.priority) row("Priorité", f.priority.name);
+      row("Assigné", f.assignee?.displayName ?? "(non assigné)");
+      row("Reporter", f.reporter?.displayName ?? "—");
+      if (f.parent) {
+        const pt = f.parent.fields.issuetype?.name ?? "?";
+        row(
+          "Parent",
+          `${f.parent.key} (${pt}) — ${f.parent.fields.summary ?? ""}`,
+        );
+      }
+      if (sprint) {
+        const stateLabel =
+          sprint.state === "active"
+            ? " (actif)"
+            : sprint.state === "future"
+              ? " (à venir)"
+              : " (clos)";
+        row("Sprint", `${sprint.name}${stateLabel}`);
+      } else {
+        row("Sprint", "(hors sprint)");
+      }
+      row("Créé le", fmtDate(f.created));
+      row("Modifié", fmtDate(f.updated));
+
+      const descText = f.description ? adfToText(f.description) : null;
+      console.log("\nDescription :");
+      if (descText) {
+        console.log(
+          descText
+            .split("\n")
+            .map((l) => `  ${l}`)
+            .join("\n"),
+        );
+      } else {
+        console.log("  (aucune)");
+      }
+
+      console.log(`\nLiens (${links.length}) :`);
+      if (links.length === 0) {
+        console.log("  (aucun)");
+      } else {
+        for (const l of links) {
+          if (l.outwardIssue) {
+            const rel = l.type.outward ?? l.type.name;
+            console.log(
+              `  → ${rel} ${l.outwardIssue.key} — ${l.outwardIssue.fields.summary ?? ""}`,
+            );
+          } else if (l.inwardIssue) {
+            const rel = l.type.inward ?? l.type.name;
+            console.log(
+              `  ← ${rel} ${l.inwardIssue.key} — ${l.inwardIssue.fields.summary ?? ""}`,
+            );
+          }
+        }
+      }
+
+      console.log(`\nSous-tâches (${subtasks.length}) :`);
+      if (subtasks.length === 0) {
+        console.log("  (aucune)");
+      } else {
+        for (const s of subtasks) {
+          const st = s.fields.issuetype?.name ?? "";
+          const ss = s.fields.status?.name ?? "?";
+          console.log(
+            `  • ${s.key} [${st}] [${ss}] — ${s.fields.summary ?? ""}`,
+          );
+        }
+      }
+
+      console.log(`\nPièces jointes (${attachments.length}) :`);
+      if (attachments.length === 0) {
+        console.log("  (aucune)");
+      } else {
+        for (const a of attachments) {
+          console.log(`  • ${a.filename} (${formatSize(a.size)}, id ${a.id})`);
+        }
+      }
+
+      console.log(`\nCommentaires (${comments.length}) :`);
+      if (comments.length === 0) {
+        console.log("  (aucun)");
+      } else {
+        for (const c of comments) {
+          const author = c.author?.displayName ?? "?";
+          console.log(`  [${author} – ${fmtDate(c.created)}]`);
+          const body = adfToText(c.body);
+          console.log(
+            body
+              .split("\n")
+              .map((l) => `  ${l}`)
+              .join("\n"),
+          );
+          console.log("");
+        }
+      }
+      console.log("");
     });
 
   program

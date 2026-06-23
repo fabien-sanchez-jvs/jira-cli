@@ -117,3 +117,158 @@ export const AddCommentResponseSchema = z
   .passthrough();
 
 export type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;
+
+// ── Sous-schémas pour le détail d'une fiche (non exportés) ───────────────────
+
+const SprintDetailSchema = SprintSchema.passthrough();
+
+const SubtaskRefSchema = z
+  .object({
+    id: z.string(),
+    key: z.string(),
+    fields: z
+      .object({
+        summary: z.string().optional(),
+        status: z.object({ name: z.string() }).passthrough().optional(),
+        issuetype: z.object({ name: z.string() }).passthrough().optional(),
+        priority: z
+          .object({ name: z.string() })
+          .passthrough()
+          .optional()
+          .nullable(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+const IssueLinkRefSchema = z
+  .object({
+    id: z.string(),
+    type: z
+      .object({
+        name: z.string(),
+        inward: z.string().optional(),
+        outward: z.string().optional(),
+      })
+      .passthrough(),
+    inwardIssue: z
+      .object({
+        key: z.string(),
+        fields: z
+          .object({
+            summary: z.string().optional(),
+            status: z.object({ name: z.string() }).passthrough().optional(),
+          })
+          .passthrough(),
+      })
+      .passthrough()
+      .optional(),
+    outwardIssue: z
+      .object({
+        key: z.string(),
+        fields: z
+          .object({
+            summary: z.string().optional(),
+            status: z.object({ name: z.string() }).passthrough().optional(),
+          })
+          .passthrough(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const IssueCommentItemSchema = z
+  .object({
+    id: z.string(),
+    body: z.union([AdfNodeSchema, z.string()]).optional(),
+    created: z.string().optional(),
+    updated: z.string().optional(),
+    author: z
+      .object({
+        accountId: z.string(),
+        displayName: z.string().optional(),
+        emailAddress: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+// ── Détail complet d'une fiche (commande `get`) ───────────────────────────────
+
+export const IssueDetailSchema = z
+  .object({
+    id: z.string(),
+    key: z.string(),
+    fields: z
+      .object({
+        summary: z.string(),
+        description: z.union([AdfNodeSchema, z.null()]).optional(),
+        status: z.object({ name: z.string() }).passthrough(),
+        issuetype: z.object({ name: z.string() }).passthrough(),
+        priority: z
+          .object({ name: z.string() })
+          .passthrough()
+          .optional()
+          .nullable(),
+        assignee: z
+          .object({
+            accountId: z.string(),
+            displayName: z.string().optional(),
+            emailAddress: z.string().optional(),
+          })
+          .passthrough()
+          .optional()
+          .nullable(),
+        reporter: z
+          .object({
+            accountId: z.string(),
+            displayName: z.string().optional(),
+            emailAddress: z.string().optional(),
+          })
+          .passthrough()
+          .optional()
+          .nullable(),
+        parent: z
+          .object({
+            id: z.string(),
+            key: z.string(),
+            fields: z
+              .object({
+                summary: z.string().optional(),
+                issuetype: z
+                  .object({ name: z.string() })
+                  .passthrough()
+                  .optional(),
+                status: z.object({ name: z.string() }).passthrough().optional(),
+                priority: z
+                  .object({ name: z.string() })
+                  .passthrough()
+                  .optional()
+                  .nullable(),
+              })
+              .passthrough(),
+          })
+          .passthrough()
+          .optional()
+          .nullable(),
+        subtasks: z.array(SubtaskRefSchema).optional().default([]),
+        issuelinks: z.array(IssueLinkRefSchema).optional().default([]),
+        comment: z
+          .object({
+            comments: z.array(IssueCommentItemSchema),
+            total: z.number().optional(),
+          })
+          .passthrough()
+          .optional(),
+        attachment: z.array(AttachmentSchema).optional().default([]),
+        created: z.string().optional(),
+        updated: z.string().optional(),
+        customfield_10020: z.array(SprintDetailSchema).optional().nullable(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export type IssueDetail = z.infer<typeof IssueDetailSchema>;
