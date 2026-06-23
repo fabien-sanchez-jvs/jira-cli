@@ -28,8 +28,8 @@ const TOOL_PURPOSE =
   "CLI pour créer et modifier des fiches Jira (Jira Cloud). " +
   "Complète le connecteur Atlassian (lecture seule) en apportant les écritures : " +
   "création, mise à jour, affectation, transition de statut, ajout à un sprint, " +
-  "rattachement à une epic, lien de blocage entre fiches, gestion des pièces " +
-  "jointes (upload, liste, téléchargement).";
+  "rattachement à une epic, lien de blocage entre fiches, ajout de commentaires, " +
+  "gestion des pièces jointes (upload, liste, téléchargement).";
 
 const INVOCATION_NOTES = [
   "Invocation par le shell : `jira <commande> [options]`.",
@@ -86,6 +86,8 @@ const USAGE_RULES = [
     "statiques sur https://ffmpeg.org/download.html.",
   "La description est convertie en ADF automatiquement ; le formatage riche " +
     "(gras, listes…) n'est pas interprété.",
+  "COMMENTAIRES : `jira comment <key> <texte>` ajoute un commentaire texte brut. " +
+    "Pour un commentaire long, `--file <path>` lit depuis un fichier ('-' = stdin).",
 ];
 
 // Exemples curatés par commande (commander ne les expose pas).
@@ -117,6 +119,11 @@ const EXAMPLES: Record<string, string[]> = {
   ],
   epic: ["jira epic COM-1234 COM-100", "jira epic COM-1234 none"],
   block: ['jira block COM-1234 "COM-100>"', 'jira block COM-1234 ">COM-200"'],
+  comment: [
+    'jira comment COM-1234 "Reproduit en v2.3, priorité haute."',
+    "jira comment COM-1234 --file ./note.txt",
+    "cat note.txt | jira comment COM-1234 --file -",
+  ],
   attach: ["jira attach COM-1234 ./capture.png ./log.txt"],
   attachments: ["jira attachments COM-1234"],
   download: [

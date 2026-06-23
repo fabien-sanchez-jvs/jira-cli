@@ -4,6 +4,7 @@ import { Command } from "commander";
 import { loadConfig } from "./config.js";
 import { buildManifest, renderMarkdown, toJson } from "./describe.js";
 import {
+  addComment,
   addIssueToSprint,
   assignIssue,
   createIssue,
@@ -621,6 +622,34 @@ export function buildCli(): Command {
         writeFileSync(dest, await downloadAttachment(jira, a));
         logger.success(`Téléchargé ${a.filename} → ${dest}`);
       }
+    });
+
+  program
+    .command("comment")
+    .argument("<issueKey>", "Clé de la fiche (ex: COM-1234)")
+    .argument("[text]", "Texte du commentaire (alternatif : --file)")
+    .description("Ajoute un commentaire à une fiche")
+    .option(
+      "--file <PATH>",
+      "Lire le commentaire depuis un fichier ('-' = stdin)",
+    )
+    .action(async (issueKey, text, opts) => {
+      const content = opts.file
+        ? opts.file === "-"
+          ? await readStdin()
+          : readFileSync(resolve(opts.file), "utf8")
+        : text;
+      if (!content?.trim()) {
+        throw new Error(
+          "Texte requis : fournis le commentaire en argument ou via --file.",
+        );
+      }
+      const config = loadConfig();
+      const jira = jiraOptsFromConfig(config);
+      await addComment(jira, issueKey, content);
+      logger.success(
+        `Commentaire ajouté à ${issueKey} — ${issueUrl(config.JIRA_URL, issueKey)}`,
+      );
     });
 
   program

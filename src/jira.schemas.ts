@@ -107,3 +107,13 @@ export const IssueAttachmentsSchema = z.object({
     attachment: z.array(AttachmentSchema).optional().default([]),
   }),
 });
+
+// Réponse de POST /issue/{key}/comment (ajout de commentaire).
+export const AddCommentResponseSchema = z
+  .object({
+    id: z.string(),
+    self: z.string(),
+  })
+  .passthrough();
+
+export type AddCommentResponse = z.infer<typeof AddCommentResponseSchema>;

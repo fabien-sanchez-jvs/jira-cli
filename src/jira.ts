@@ -337,3 +337,14 @@ export async function addIssueToSprint(
     parseJson: false,
   });
 }
+
+export async function addComment(
+  opts: JiraClientOptions,
+  key: string,
+  text: string,
+): Promise<void> {
+  await request(opts, "POST", `/issue/${encodeURIComponent(key)}/comment`, {
+    body: { body: textToAdf(text) },
+    parseJson: false,
+  });
+}

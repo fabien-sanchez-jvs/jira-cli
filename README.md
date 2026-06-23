@@ -12,6 +12,7 @@ Opérations couvertes :
 - **sprint** — affecter une fiche à un sprint
 - **epic** — rattacher (ou détacher) une fiche à une epic
 - **block** — créer un lien de blocage entre deux fiches
+- **comment** — ajouter un commentaire à une fiche
 - **attach** — joindre un ou plusieurs fichiers à une fiche
 - **attachments** — lister les pièces jointes d'une fiche
 - **download** — télécharger une (ou toutes les) pièce(s) jointe(s)
@@ -106,6 +107,11 @@ jira epic COM-1234 none
 # Lien de blocage (notation > relative à la fiche éditée)
 jira block COM-1234 "COM-100>"    # COM-100 bloque COM-1234
 jira block COM-1234 ">COM-200"    # COM-1234 bloque COM-200
+
+# Commenter
+jira comment COM-1234 "Reproduit en v2.3, priorité haute."
+jira comment COM-1234 --file ./note.txt         # depuis un fichier
+cat note.txt | jira comment COM-1234 --file -   # depuis stdin
 
 # Pièces jointes
 jira attach COM-1234 ./capture.png ./log.txt   # joindre des fichiers
