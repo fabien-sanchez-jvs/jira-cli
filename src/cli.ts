@@ -1,9 +1,8 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Command } from "commander";
 import { adfToText, markdownToAdf, parseFrontmatter } from "./adf.js";
 import { loadConfig } from "./config.js";
-import { buildManifest, renderMarkdown, toJson } from "./describe.js";
 import {
   addComment,
   addIssueToSprint,
@@ -26,6 +25,7 @@ import {
 } from "./jira.js";
 import type { AdfNode, Sprint } from "./jira.schemas.js";
 import { logger } from "./logger.js";
+import { buildManifest, renderSkill, SKILL_NAME } from "./skill.js";
 
 function jiraOptsFromConfig(config: {
   JIRA_URL: string;
@@ -889,33 +889,31 @@ export function buildCli(): Command {
     });
 
   program
-    .command("describe")
+    .command("skill")
     .description(
-      "Génère un fichier décrivant l'outil (commandes, options, règles) " +
-        "destiné à être lu par un agent IA",
+      "Génère un skill Claude Code clé en main (SKILL.md) décrivant l'outil " +
+        "(commandes, options, règles d'usage) pour un agent IA",
     )
-    .option("-f, --format <FORMAT>", "Format de sortie : md | json", "md")
     .option(
-      "-o, --output <PATH>",
-      "Fichier de sortie ('-' pour stdout ; défaut: jira-cli.agent.<ext>)",
+      "-o, --output <DIR>",
+      "Dossier PARENT où créer le dossier du skill ('-' pour afficher le " +
+        "SKILL.md sur stdout ; défaut: dossier courant)",
     )
     .action((opts) => {
-      const format = opts.format === "json" ? "json" : "md";
       const manifest = buildManifest(program);
-      const content =
-        format === "json" ? toJson(manifest) : renderMarkdown(manifest);
+      const content = renderSkill(manifest);
 
-      const output =
-        opts.output ??
-        (format === "json" ? "jira-cli.agent.json" : "jira-cli.agent.md");
-
-      if (output === "-") {
+      if (opts.output === "-") {
         console.log(content);
         return;
       }
-      const target = resolve(output);
+      // Le dossier feuille porte toujours le nom du skill (un skill se résout
+      // par son dossier) : on l'impose plutôt que de le laisser à l'utilisateur.
+      const dir = join(resolve(opts.output ?? "."), SKILL_NAME);
+      mkdirSync(dir, { recursive: true });
+      const target = join(dir, "SKILL.md");
       writeFileSync(target, content, "utf8");
-      logger.success(`Description écrite : ${target}`);
+      logger.success(`Skill écrit : ${target}`);
     });
 
   return program;

@@ -21,16 +21,36 @@ type IntrospectableCommand = Command & {
   registeredArguments: CommanderArgument[];
 };
 
-// Commandes exclues du manifeste (méta / non métier).
-const EXCLUDED = new Set(["help", "describe"]);
+// Commandes exclues du skill (méta / non métier).
+const EXCLUDED = new Set(["help", "skill"]);
+
+// Identité du skill généré : sert à la fois au frontmatter `name` ET au nom du
+// dossier qui contient le SKILL.md (un skill se résout par son dossier — les
+// deux doivent rester identiques, d'où l'export plutôt qu'un nom libre).
+export const SKILL_NAME = "jira-cli";
+
+// La description est le mécanisme de déclenchement du skill : elle dit À LA FOIS
+// ce que fait l'outil ET quand l'invoquer. Elle est volontairement « insistante »
+// et liste les verbes métier + le fait qu'une simple clé de fiche (COM-1234)
+// suffit, car les skills ont tendance à se sous-déclencher.
+const SKILL_DESCRIPTION =
+  "Lit, crée et modifie des fiches Jira Cloud via la CLI `jira` (en écriture, " +
+  "là où le connecteur Atlassian est en lecture seule). Utilise ce skill dès " +
+  "que l'utilisateur veut consulter le détail d'une fiche, en créer ou en " +
+  "modifier une, l'affecter à quelqu'un, changer son statut, la rattacher à un " +
+  "sprint ou une epic, créer un lien de blocage, ajouter un commentaire, ou " +
+  "gérer ses pièces jointes (upload, liste, téléchargement) — y compris quand " +
+  "il fournit seulement une clé de fiche (ex. COM-1234) sans nommer " +
+  "explicitement « Jira » ni la CLI.";
 
 const TOOL_PURPOSE =
-  "CLI pour lire, créer et modifier des fiches Jira (Jira Cloud). " +
-  "Complète le connecteur Atlassian en apportant : " +
+  "Cette CLI pilote Jira Cloud en lecture/écriture : " +
   "lecture détaillée d'une fiche (get), création, mise à jour, affectation, " +
   "transition de statut, ajout à un sprint, rattachement à une epic, " +
   "lien de blocage entre fiches, ajout de commentaires, " +
-  "gestion des pièces jointes (upload, liste, téléchargement).";
+  "gestion des pièces jointes (upload, liste, téléchargement). " +
+  "Elle complète le connecteur Atlassian (lecture seule) en apportant les " +
+  "écritures.";
 
 const INVOCATION_NOTES = [
   "Invocation par le shell : `jira <commande> [options]`.",
@@ -231,16 +251,32 @@ export function buildManifest(program: Command): Manifest {
   };
 }
 
-export function toJson(manifest: Manifest): string {
-  return JSON.stringify(manifest, null, 2);
+// Échappe une valeur scalaire pour un frontmatter YAML mono-ligne.
+function yamlString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
-export function renderMarkdown(manifest: Manifest): string {
+// Rend le SKILL.md complet : frontmatter de déclenchement + corps lisible par
+// l'agent (objectif, invocation, règles, catalogue des commandes).
+export function renderSkill(manifest: Manifest): string {
   const lines: string[] = [];
 
-  lines.push(`# ${manifest.name} — manifeste d'outil pour agent IA`);
+  lines.push("---");
+  lines.push(`name: ${SKILL_NAME}`);
+  lines.push(`description: ${yamlString(SKILL_DESCRIPTION)}`);
+  lines.push("---");
+  lines.push("");
+
+  lines.push(`# ${SKILL_NAME} — piloter Jira Cloud`);
   lines.push("");
   lines.push(manifest.description);
+  lines.push("");
+  lines.push(
+    "Ce skill est généré par `jira skill` : il décrit les commandes, options " +
+      "et règles d'usage réelles de la CLI. Suivre les règles ci-dessous AVANT " +
+      "d'agir évite les erreurs courantes (transitions invalides, sprint " +
+      "ambigu, écrasement de description).",
+  );
   lines.push("");
 
   lines.push("## Invocation");

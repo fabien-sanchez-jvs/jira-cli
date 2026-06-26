@@ -18,8 +18,8 @@ Opérations couvertes :
 - **attach** — joindre un ou plusieurs fichiers à une fiche
 - **attachments** — lister les pièces jointes d'une fiche
 - **download** — télécharger une (ou toutes les) pièce(s) jointe(s)
-- **describe** — générer une description de l'outil (commandes, options, règles)
-  destinée à être lue par un agent IA
+- **skill** — générer un skill Claude Code clé en main (`SKILL.md`) décrivant
+  l'outil (commandes, options, règles) pour un agent IA
 
 ## Installation
 
@@ -130,11 +130,10 @@ jira download COM-1234 capture.png              # télécharger par nom
 jira download COM-1234 10042                    # ou par id d'attachement
 jira download COM-1234 all --out ./dl           # tout, dans ./dl
 
-# Décrire l'outil pour un agent IA
-jira describe                            # écrit jira-cli.agent.md
-jira describe -f json                    # écrit jira-cli.agent.json
-jira describe -o -                       # affiche sur stdout (md par défaut)
-jira describe -f json -o manifest.json   # format + fichier de sortie au choix
+# Générer le skill pour un agent IA
+jira skill                       # écrit ./jira-cli/SKILL.md
+jira skill -o ~/.claude/skills   # écrit ~/.claude/skills/jira-cli/SKILL.md
+jira skill -o -                  # affiche le SKILL.md sur stdout
 ```
 
 Ajoute `--json` à `create` pour une sortie machine
@@ -145,17 +144,21 @@ ou un workflow Claude.
 
 Active les logs détaillés (URL des requêtes) avec `DEBUG=1`.
 
-### `describe`
+### `skill`
 
-La commande `describe` génère, par introspection des commandes/options
-réellement enregistrées, un manifeste décrivant l'outil (commandes, arguments,
-options, règles d'usage) destiné à être lu par un agent IA. C'est la source de
-vérité « machine » : la regénérer après toute évolution de la CLI garantit que
-l'agent dispose d'une description à jour.
+La commande `skill` génère, par introspection des commandes/options réellement
+enregistrées, un **skill Claude Code clé en main** : un dossier contenant un
+`SKILL.md` (frontmatter `name`/`description` de déclenchement + corps décrivant
+objectif, invocation, règles d'usage et catalogue des commandes). C'est la
+source de vérité « machine » : la regénérer après toute évolution de la CLI
+garantit que l'agent dispose d'une description à jour. Le dossier généré porte
+toujours le nom du skill (`jira-cli/`) ; le déposer dans `~/.claude/skills/`
+(ou `.claude/skills/` d'un projet) suffit à l'activer.
 
-- `-f, --format <md|json>` — format de sortie (défaut : `md`)
-- `-o, --output <PATH>` — fichier de sortie (`-` pour stdout ;
-  défaut : `jira-cli.agent.md` / `jira-cli.agent.json`)
+- `-o, --output <DIR>` — dossier **parent** où créer le dossier `jira-cli/`
+  contenant le `SKILL.md` (`-` pour afficher le `SKILL.md` sur stdout ; défaut :
+  dossier courant). Le nom du dossier feuille n'est pas configurable : il doit
+  correspondre au nom du skill pour que celui-ci soit reconnu.
 
 ## Notes
 
