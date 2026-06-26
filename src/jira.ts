@@ -1,4 +1,5 @@
 import { textToAdf } from "./adf.js";
+import type { AdfNode } from "./jira.schemas.js";
 import {
   type Attachment,
   AttachmentsResponseSchema,
@@ -123,7 +124,7 @@ export interface CreateIssueInput {
   projectKey: string;
   issueType: string;
   summary: string;
-  description?: string;
+  description?: string | AdfNode;
   assigneeAccountId?: string | null;
   parentKey?: string;
 }
@@ -137,7 +138,12 @@ export async function createIssue(
     issuetype: { name: input.issueType },
     summary: input.summary,
   };
-  if (input.description) fields.description = textToAdf(input.description);
+  if (input.description) {
+    fields.description =
+      typeof input.description === "string"
+        ? textToAdf(input.description)
+        : input.description;
+  }
   if (input.assigneeAccountId) {
     fields.assignee = { accountId: input.assigneeAccountId };
   }
@@ -149,7 +155,7 @@ export async function createIssue(
 
 export interface UpdateIssueInput {
   summary?: string;
-  description?: string;
+  description?: string | AdfNode;
 }
 
 export async function updateIssue(
@@ -160,7 +166,10 @@ export async function updateIssue(
   const fields: Record<string, unknown> = {};
   if (input.summary !== undefined) fields.summary = input.summary;
   if (input.description !== undefined) {
-    fields.description = textToAdf(input.description);
+    fields.description =
+      typeof input.description === "string"
+        ? textToAdf(input.description)
+        : input.description;
   }
   await request(opts, "PUT", `/issue/${encodeURIComponent(key)}`, {
     body: { fields },

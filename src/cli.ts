@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { Command } from "commander";
-import { adfToText } from "./adf.js";
+import { adfToText, markdownToAdf, parseFrontmatter } from "./adf.js";
 import { loadConfig } from "./config.js";
 import { buildManifest, renderMarkdown, toJson } from "./describe.js";
 import {
@@ -24,7 +24,7 @@ import {
   updateIssue,
   uploadAttachments,
 } from "./jira.js";
-import type { Sprint } from "./jira.schemas.js";
+import type { AdfNode, Sprint } from "./jira.schemas.js";
 import { logger } from "./logger.js";
 
 function jiraOptsFromConfig(config: {
@@ -70,17 +70,33 @@ function readStdin(): Promise<string> {
   });
 }
 
+type DescriptionRead = {
+  content: string | AdfNode | undefined;
+  // Champs extraits du frontmatter YAML (uniquement pour les .md)
+  frontmatter: Record<string, string>;
+};
+
 // Récupère la description depuis --description, --description-file <path>,
-// ou stdin si --description-file vaut "-". Retourne undefined si rien fourni.
+// ou stdin si --description-file vaut "-".
+// Les fichiers .md sont convertis en ADF et leur frontmatter est renvoyé.
 async function readDescription(opts: {
   description?: string;
   descriptionFile?: string;
-}): Promise<string | undefined> {
+}): Promise<DescriptionRead> {
   if (opts.descriptionFile) {
-    if (opts.descriptionFile === "-") return await readStdin();
-    return readFileSync(resolve(opts.descriptionFile), "utf8");
+    const text =
+      opts.descriptionFile === "-"
+        ? await readStdin()
+        : readFileSync(resolve(opts.descriptionFile), "utf8");
+    if (opts.descriptionFile !== "-" && opts.descriptionFile.endsWith(".md")) {
+      return {
+        content: markdownToAdf(text),
+        frontmatter: parseFrontmatter(text),
+      };
+    }
+    return { content: text, frontmatter: {} };
   }
-  return opts.description;
+  return { content: opts.description, frontmatter: {} };
 }
 
 // Résout un assigné en accountId :
@@ -283,7 +299,10 @@ export function buildCli(): Command {
       "Clé du projet (défaut: JIRA_DEFAULT_PROJECT)",
     )
     .option("-t, --type <TYPE>", "Type de ticket (défaut: JIRA_DEFAULT_TYPE)")
-    .requiredOption("-s, --summary <TEXT>", "Titre de la fiche")
+    .option(
+      "-s, --summary <TEXT>",
+      "Titre de la fiche (ou title: dans le frontmatter)",
+    )
     .option("-d, --description <TEXT>", "Description (texte brut)")
     .option(
       "--description-file <PATH>",
@@ -315,40 +334,54 @@ export function buildCli(): Command {
       const config = loadConfig();
       const jira = jiraOptsFromConfig(config);
 
-      const project = opts.project ?? config.JIRA_DEFAULT_PROJECT;
+      // Lire la description en premier pour accéder au frontmatter YAML.
+      const { content: description, frontmatter } = await readDescription(opts);
+
+      // Résolution des champs : CLI > frontmatter > config/défauts.
+      const summary = opts.summary ?? frontmatter.title;
+      if (!summary) {
+        throw new Error(
+          "--summary requis (ou ajoute title: dans le frontmatter du fichier .md).",
+        );
+      }
+      const project =
+        opts.project ?? frontmatter.project ?? config.JIRA_DEFAULT_PROJECT;
       if (!project) {
         throw new Error("--project requis (ou définis JIRA_DEFAULT_PROJECT).");
       }
-      const type = opts.type ?? config.JIRA_DEFAULT_TYPE;
+      const type = opts.type ?? frontmatter.type ?? config.JIRA_DEFAULT_TYPE;
       if (!type) {
         throw new Error("--type requis (ou définis JIRA_DEFAULT_TYPE).");
       }
+      const effectiveEpic = opts.epic ?? frontmatter.epic;
+      const effectiveBlock = opts.block ?? frontmatter.block;
 
-      const description = await readDescription(opts);
       let assigneeAccountId: string | null | undefined;
-      if (opts.assignee) {
-        assigneeAccountId = await resolveAccountId(jira, opts.assignee);
+      const assigneeInput = opts.assignee ?? frontmatter.assignee;
+      if (assigneeInput) {
+        assigneeAccountId = await resolveAccountId(jira, assigneeInput);
       }
 
       const created = await createIssue(jira, {
         projectKey: project,
         issueType: type,
-        summary: opts.summary,
+        summary,
         description,
         assigneeAccountId,
-        parentKey: opts.epic,
+        parentKey: effectiveEpic,
       });
 
-      // Sprint : --sprint <id|nom> explicite ; --no-sprint (opts.sprint===false)
-      // pour créer hors sprint ; par défaut on rattache au sprint actif déduit.
+      // Sprint : --sprint > frontmatter sprint: > sprint actif ; --no-sprint annule tout.
       const boardId = opts.board ?? config.JIRA_DEFAULT_BOARD;
       let sprintId: number | undefined;
       let sprintLabel: string | undefined;
       let sprintDefaulted = false;
-      if (opts.sprint === false) {
-        // création hors sprint
-      } else if (opts.sprint) {
-        sprintId = await resolveSprintId(jira, opts.sprint, boardId, project);
+      const sprintSpec =
+        opts.sprint !== undefined ? opts.sprint : frontmatter.sprint;
+      if (sprintSpec === false) {
+        // création hors sprint (--no-sprint)
+      } else if (sprintSpec) {
+        sprintId = await resolveSprintId(jira, sprintSpec, boardId, project);
       } else {
         const active = await resolveActiveSprint(jira, boardId, project);
         if (active) {
@@ -361,10 +394,10 @@ export function buildCli(): Command {
         await addIssueToSprint(jira, sprintId, created.key);
       }
 
-      // Lien de blocage optionnel (--block), relatif à la fiche créée.
-      if (opts.block) {
+      // Lien de blocage optionnel (--block ou block: dans le frontmatter).
+      if (effectiveBlock) {
         const { outwardKey, inwardKey } = parseBlockSpec(
-          opts.block,
+          effectiveBlock,
           created.key,
         );
         await linkIssues(jira, { type: "Blocks", outwardKey, inwardKey });
@@ -378,8 +411,8 @@ export function buildCli(): Command {
               key: created.key,
               url,
               sprint: sprintId ?? null,
-              epic: opts.epic ?? null,
-              block: opts.block ?? null,
+              epic: effectiveEpic ?? null,
+              block: effectiveBlock ?? null,
             },
             null,
             2,
@@ -392,8 +425,10 @@ export function buildCli(): Command {
                 sprintDefaulted ? " (actif, défaut)" : ""
               }`
             : "";
-        const epicSuffix = opts.epic ? ` — epic ${opts.epic}` : "";
-        const blockSuffix = opts.block ? ` — blocage ${opts.block}` : "";
+        const epicSuffix = effectiveEpic ? ` — epic ${effectiveEpic}` : "";
+        const blockSuffix = effectiveBlock
+          ? ` — blocage ${effectiveBlock}`
+          : "";
         logger.success(
           `Créé ${created.key} — ${url}${sprintSuffix}${epicSuffix}${blockSuffix}`,
         );
@@ -424,9 +459,10 @@ export function buildCli(): Command {
       }
       const config = loadConfig();
       const jira = jiraOptsFromConfig(config);
-      const description = await readDescription(opts);
+      const { content: description, frontmatter } = await readDescription(opts);
+      const summary = opts.summary ?? frontmatter.title;
       await updateIssue(jira, issueKey, {
-        summary: opts.summary,
+        summary,
         description,
       });
       logger.success(

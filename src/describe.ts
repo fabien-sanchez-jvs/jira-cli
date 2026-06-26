@@ -89,8 +89,14 @@ const USAGE_RULES = [
     "`sudo apt install ffmpeg` ; Fedora `sudo dnf install ffmpeg` ; Windows " +
     "`winget install Gyan.FFmpeg` (ou `choco install ffmpeg`) ; sinon binaires " +
     "statiques sur https://ffmpeg.org/download.html.",
-  "La description est convertie en ADF automatiquement ; le formatage riche " +
-    "(gras, listes…) n'est pas interprété.",
+  "DESCRIPTION depuis un fichier .md : le contenu est converti en ADF riche " +
+    "(titres, gras, italique, code inline, blocs de code, listes, blockquotes, liens). " +
+    "Le frontmatter YAML (bloc --- … ---) est stripé du corps et ses champs servent " +
+    "de valeurs par défaut pour la commande : " +
+    "`title` → --summary (create et update) ; " +
+    "`project` → --project ; `type` → --type ; `assignee` → --assignee ; " +
+    "`epic` → --epic ; `sprint` → --sprint ; `block` → --block. " +
+    "Les flags CLI ont toujours la priorité sur le frontmatter.",
   "COMMENTAIRES : `jira comment <key> <texte>` ajoute un commentaire texte brut. " +
     "Pour un commentaire long, `--file <path>` lit depuis un fichier ('-' = stdin).",
 ];
@@ -100,6 +106,7 @@ const EXAMPLES: Record<string, string[]> = {
   get: ["jira get COM-1234", "jira get COM-1234 --json"],
   create: [
     'jira create -s "Bouton export grisé sur mobile" -t Bug -d "Détail du bug…"',
+    "jira create --description-file ./fiche.md   # title/project/type/assignee/epic/sprint/block depuis le frontmatter",
     'jira create -s "Refonte du header" --description-file ./desc.md',
     'jira create -s "Titre" -a moi@jvs.fr --sprint "Sprint 42" --board 123',
     'jira create -s "Titre" --epic COM-100',

@@ -70,9 +70,13 @@ jira create -s "Bouton export grisé sur mobile" \
   -d "Sur l'écran Publications, le bouton Export reste grisé en < 768px." \
   -t Bug
 
-# Description multi-lignes depuis un fichier (ou stdin avec '-')
+# Description depuis un fichier (ou stdin avec '-')
 jira create -s "Refonte du header" --description-file ./desc.md
 cat desc.md | jira create -s "Refonte du header" --description-file -
+
+# Fichier .md : conversion Markdown→ADF + champs depuis le frontmatter YAML
+# (title/project/type/assignee/epic/sprint/block — les flags CLI ont la priorité)
+jira create --description-file ./fiche.md
 
 # Par défaut, une fiche créée est rattachée au SPRINT ACTIF (déduit du projet)
 jira create -s "Titre"                         # → sprint actif s'il existe
@@ -156,9 +160,23 @@ l'agent dispose d'une description à jour.
 ## Notes
 
 - L'API Jira v3 attend le champ `description` au format **ADF** (Atlassian
-  Document Format). La conversion depuis du texte brut est automatique
-  (paragraphes séparés par une ligne vide). Le formatage riche n'est pas
-  interprété.
+  Document Format). La conversion est automatique :
+  - fichier **`.md`** → conversion Markdown complète (titres, gras, italique,
+    code inline, blocs de code, listes, blockquotes, liens) ;
+  - texte brut / `--description` → paragraphes séparés par une ligne vide.
+- **Frontmatter YAML** dans un `.md` : le bloc `---` en tête de fichier est
+  stripé du corps et ses champs alimentent les options de la commande —
+  `title` → `--summary`, `project`, `type`, `assignee`, `epic`, `sprint`,
+  `block`. Les flags CLI ont toujours la priorité. Exemple :
+  ```yaml
+  ---
+  title: Bug — export grisé sur mobile
+  type: Bug
+  assignee: me
+  epic: COM-100
+  ---
+  ```
+  Puis : `jira create --description-file ./fiche.md`
 - Les noms de **statut** (transition) et de **sprint** sont résolus de façon
   insensible à la casse et aux accents.
 - Cibler un **sprint par nom** nécessite un board. Ordre de résolution :

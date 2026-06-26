@@ -28,6 +28,7 @@ documentation : ils ne doivent jamais diverger du code.
 ```bash
 npm run build      # tsc — doit passer sans erreur
 npm run lint       # biome — ou `npm run lint:fix` pour corriger
+npm run test       # vitest
 ```
 
 ## Conventions
