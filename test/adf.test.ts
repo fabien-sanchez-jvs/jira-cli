@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownToAdf, stripFrontmatter } from "../src/adf.js";
+import { markdownToAdf, parseFrontmatter, stripFrontmatter } from "../src/adf.js";
 import type { AdfNode } from "../src/jira.schemas.js";
 
 // ── stripFrontmatter ──────────────────────────────────────────────────────────
@@ -33,6 +33,39 @@ describe("stripFrontmatter", () => {
   it("normalise les fins de ligne CRLF", () => {
     const input = "---\r\ntitle: T\r\n---\r\n\r\nCorps.";
     expect(stripFrontmatter(input)).toBe("Corps.");
+  });
+});
+
+// ── parseFrontmatter ──────────────────────────────────────────────────────────
+
+describe("parseFrontmatter", () => {
+  it("extrait des valeurs scalaires nues", () => {
+    const input = "---\ntitle: Mon titre\ntype: Bug\n---\n\nCorps.";
+    expect(parseFrontmatter(input)).toEqual({ title: "Mon titre", type: "Bug" });
+  });
+
+  it("retire les guillemets doubles encadrants", () => {
+    const input = '---\ntitle: "Mon titre"\n---\n';
+    expect(parseFrontmatter(input)).toEqual({ title: "Mon titre" });
+  });
+
+  it("retire les guillemets simples encadrants", () => {
+    const input = "---\ntitle: 'Mon titre'\n---\n";
+    expect(parseFrontmatter(input)).toEqual({ title: "Mon titre" });
+  });
+
+  it("préserve les guillemets internes non encadrants", () => {
+    const input = '---\ntitle: Le "header" refait\n---\n';
+    expect(parseFrontmatter(input)).toEqual({ title: 'Le "header" refait' });
+  });
+
+  it("ne retire pas une paire de guillemets dépareillés", () => {
+    const input = "---\ntitle: \"pas fermé\n---\n";
+    expect(parseFrontmatter(input)).toEqual({ title: '"pas fermé' });
+  });
+
+  it("retourne un objet vide sans frontmatter", () => {
+    expect(parseFrontmatter("# Titre\n\nCorps.")).toEqual({});
   });
 });
 

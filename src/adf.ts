@@ -2,6 +2,17 @@ import type { AdfNode } from "./jira.schemas.js";
 
 // ── Markdown → ADF ────────────────────────────────────────────────────────────
 
+// Retire une paire de guillemets (simples ou doubles) encadrant une valeur.
+function unquote(value: string): string {
+  if (value.length >= 2) {
+    const q = value[0];
+    if ((q === '"' || q === "'") && value[value.length - 1] === q) {
+      return value.slice(1, -1);
+    }
+  }
+  return value;
+}
+
 // Extrait les paires clé/valeur du frontmatter YAML (valeurs scalaires uniquement).
 // Retourne un objet vide si le texte ne commence pas par ---.
 export function parseFrontmatter(text: string): Record<string, string> {
@@ -12,7 +23,7 @@ export function parseFrontmatter(text: string): Record<string, string> {
   const result: Record<string, string> = {};
   for (const line of s.slice(4, end).split("\n")) {
     const m = line.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)\s*:\s*(.*)/);
-    if (m) result[m[1]] = m[2].trim();
+    if (m) result[m[1]] = unquote(m[2].trim());
   }
   return result;
 }
