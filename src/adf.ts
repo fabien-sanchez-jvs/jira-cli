@@ -317,8 +317,20 @@ function visitAdfNode(node: AdfNode): string {
     case "blockCard":
       return (node.attrs?.url as string) ?? "";
     case "mediaSingle":
-    case "media":
-      return "";
+    case "mediaGroup":
+      // Conteneurs : on délègue le rendu à leurs enfants `media`.
+      return (node.content ?? []).map(visitAdfNode).filter(Boolean).join("\n");
+    case "media": {
+      const type = (node.attrs?.type as string) || "media";
+      // Média externe : lien pointant hors de la fiche.
+      if (node.attrs?.type === "external" && node.attrs?.url) {
+        return `[${type} : ${node.attrs.url as string}]`;
+      }
+      // Média fichier : pièce jointe de la fiche.
+      const ref =
+        (node.attrs?.alt as string) || (node.attrs?.id as string) || "";
+      return `[PJ ${type} : ${ref}]`;
+    }
     default:
       return (node.content ?? []).map(visitAdfNode).join("");
   }
